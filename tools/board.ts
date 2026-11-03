@@ -9,6 +9,9 @@ import { evaluateBoard, LineResult } from '../assets/scripts/core/evaluate';
 import { EFFECT_NAME } from '../assets/scripts/core/hands';
 import { TUTORIAL_LAYOUT } from '../assets/scripts/core/decks';
 
+// Friendly errors for typos in a board ("Not a card", rows of different lengths).
+process.on('uncaughtException', (e) => { console.error(`\n  ${e.message}\n`); process.exit(1); });
+
 const text = process.argv.slice(2).join(' ').trim() || TUTORIAL_LAYOUT;
 const grid = gridFromText(text);
 const result = evaluateBoard(grid);

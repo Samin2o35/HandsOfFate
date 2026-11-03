@@ -6,7 +6,8 @@
   },
   "scripts": {
     "test": "vitest run",
-    "board": "tsx tools/board.ts"
+    "board": "tsx tools/board.ts",
+    "fight": "tsx tools/fight.ts"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",
