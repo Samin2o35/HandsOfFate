@@ -66,7 +66,11 @@ export interface FightEvent {
     readonly label: string;
     /** Every cell the pattern covered (for the hit flash). */
     readonly area: readonly number[];
-    /** Cells that actually changed. */
+    /**
+     * Cells that changed, in the order they were hit. A flush hits twice, so a
+     * cell can appear twice (first hit pops its shield, second destroys it):
+     * replaying applyEffect over this list gives exactly the fight's result.
+     */
     readonly cells: readonly number[];
     /** Charges left on this hand after firing (Infinity for attack/rot and twists). */
     readonly chargesLeft: number;
@@ -295,7 +299,7 @@ export class Fight {
         return {
             time: this.time, side: h.side, target: targetSide.id, kind: 'hand', hand: h.hand,
             sourceId: h.hand.id, effect: h.hand.effect, label: h.hand.label,
-            area: [...new Set(area)], cells: [...new Set(changed)], chargesLeft: h.charges,
+            area: [...new Set(area)], cells: changed, chargesLeft: h.charges,
         };
     }
 

@@ -148,9 +148,11 @@ export function buildColumnLabel(parent: Node, hand: Hand | null, full: boolean,
         makeLabel(node, 'None', full ? '–' : '·', { size: FONT.label, color: COLOR.dim, y: 3 });
         return { node, fill: null, fillWidth: 0, pips: [] };
     }
+    // Four rows in a ~99 px panel: title, icon + cooldown, pips, bar.
     const top = h / 2;
-    makeLabel(node, 'Title', SHORT[hand.category], { size: FONT.labelSmall, spacing: 1, color: COLOR.cream, y: top - 24 });
-    const row = makeNode(node, 'Row', 0, 0, { y: top - 52 });
+    const titleY = top - 20, rowY = top - 44, pipY = top - 68, barY = -h / 2 + 14;
+    makeLabel(node, 'Title', SHORT[hand.category], { size: FONT.labelSmall, spacing: 1, color: COLOR.cream, y: titleY });
+    const row = makeNode(node, 'Row', 0, 0, { y: rowY });
     const cd = makeLabel(row, 'Cooldown', hand.cooldown.toFixed(1), { font: 'body', size: FONT.bodySmall, color: COLOR.cream, align: 'left', x: 0 });
     const total = 22 + 4 + textWidth(cd);
     makeSprite(row, 'Icon', kit.suitIcon(hand.suit), 22, 22, { x: -total / 2 + 11 });
@@ -159,11 +161,10 @@ export function buildColumnLabel(parent: Node, hand: Hand | null, full: boolean,
     const charges = EFFECT_CHARGES[hand.effect];
     if (Number.isFinite(charges)) {
         for (let i = 0; i < charges; i++) {
-            pips.push(makeSprite(node, `Pip${i}`, kit.suitIcon(hand.suit), 20, 20, { x: (i - (charges - 1) / 2) * 24, y: top - 78 }).node);
+            pips.push(makeSprite(node, `Pip${i}`, kit.suitIcon(hand.suit), 18, 18, { x: (i - (charges - 1) / 2) * 22, y: pipY }).node);
         }
     }
     const barW = w - 30;
-    const barY = -h / 2 + 18;
     makeSprite(node, 'BarTrack', kit.barTrack, barW, 12, { x: 0, y: barY }, true);
     const fill = makeSprite(node, 'BarFill', kit.barFillGold, barW, 12, { x: -barW / 2, y: barY, anchorX: 0 }, true).node;
     return { node, fill, fillWidth: barW, pips };
@@ -196,9 +197,32 @@ export function buildHealthGrid(parent: Node, health: HealthGrid | number, maxW:
     const cells: Sprite[] = [];
     for (let i = 0; i < count; i++) {
         const r = Math.floor(i / cols), c = i % cols;
-        cells.push(makeSprite(node, `Cell${i}`, kit.cellAlive, size, size, { x: c * pitch + size / 2, y: -(r * pitch + size / 2) }));
+        const cell = makeSprite(node, `Cell${i}`, kit.cellAlive, size, size, { x: c * pitch + size / 2, y: -(r * pitch + size / 2) });
+        // Shield (♦) or rot (♣) mark on top, hidden until needed.
+        const mark = makeSprite(cell.node, 'Mark', null, Math.round(size * 0.66), Math.round(size * 0.66));
+        mark.node.active = false;
+        cells.push(cell);
     }
-    return { node, cells, width, height };
+    const parts = { node, cells, width, height };
+    if (typeof health !== 'number') paintHealth(parts, health);
+    return parts;
+}
+
+/** Shows each cell's state: alive (♦ mark if shielded), lost, or rotted (♣ mark). */
+export function paintHealth(parts: HealthGridParts, g: HealthGrid) {
+    const kit = UiKit.get();
+    g.cells.forEach((c, i) => {
+        const sprite = parts.cells[i];
+        if (!sprite) return;
+        sprite.spriteFrame = c.state === 'alive' ? kit.cellAlive : c.state === 'lost' ? kit.cellLost : kit.cellRotted;
+        const mark = sprite.node.getChildByName('Mark')?.getComponent(Sprite);
+        if (!mark) return;
+        const showShield = c.state === 'alive' && c.shield;
+        const showRot = c.state === 'rotted';
+        mark.node.active = showShield || showRot;
+        if (showShield) mark.spriteFrame = kit.suitIcon('D');
+        else if (showRot) mark.spriteFrame = kit.suitIcon('C');
+    });
 }
 
 // ---- Mini board (opponent table) ---------------------------------------------------------

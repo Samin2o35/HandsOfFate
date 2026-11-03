@@ -56,6 +56,10 @@ export class UiKit extends Component {
     @property({ type: [SpriteFrame], tooltip: 'Empty slots, in order: 2x, 1.5x, 1x, 0.5x' }) cardSlots: SpriteFrame[] = [];
 
     @property(SpriteFrame) cellAlive: SpriteFrame | null = null;
+    @property(SpriteFrame) cellLost: SpriteFrame | null = null;
+    @property(SpriteFrame) cellRotted: SpriteFrame | null = null;
+    @property({ type: SpriteFrame, tooltip: 'White ring, tinted in code for hit / heal / rot / shield flashes' }) ringWhite: SpriteFrame | null = null;
+    @property({ type: SpriteFrame, tooltip: 'Small white square for sparks (tinted in code)' }) spark: SpriteFrame | null = null;
     @property(SpriteFrame) barTrack: SpriteFrame | null = null;
     @property(SpriteFrame) barFill: SpriteFrame | null = null;
     @property(SpriteFrame) barFillGold: SpriteFrame | null = null;
@@ -85,6 +89,7 @@ export class UiKit extends Component {
         const paths: string[] = [CARD_BACK_PATH, 'concept/king_roughout'];
         for (const suit of SUITS) {
             paths.push(`ui/icons/suit_${suit}`);
+            paths.push(`ui/icons/suit_${suit}_spent`);
             for (const rank of RANKS) {
                 paths.push(updatedArtPath({ suit, rank }));
                 paths.push(classicArtPath({ suit, rank }));
@@ -104,6 +109,8 @@ export class UiKit extends Component {
     cardFrame(card: Pick<Card, 'suit' | 'rank'>): SpriteFrame | null { return this.frame(updatedArtPath(card)); }
     classicFrame(card: Pick<Card, 'suit' | 'rank'>): SpriteFrame | null { return this.frame(classicArtPath(card)); }
     suitIcon(suit: Suit): SpriteFrame | null { return this.frame(`ui/icons/suit_${suit}`); }
+    /** Grey pip for a spent heal / armor charge. */
+    spentIcon(suit: Suit): SpriteFrame | null { return this.frame(`ui/icons/suit_${suit}_spent`); }
 
     /** Empty-slot frame closest to a card width. */
     slotFor(cardWidth: number): SpriteFrame | null {

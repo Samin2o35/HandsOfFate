@@ -104,6 +104,18 @@ class GameState {
         return earned;
     }
 
+    /** Re-reads the saved run. A save made mid-fight comes back at that round's planning. */
+    reloadRun(): Run | null {
+        try {
+            const text = sys.localStorage.getItem(KEY_RUN);
+            this.run = text ? Run.fromJSON(text) : null;
+        } catch (e) {
+            console.warn('Saved run could not be reloaded', e);
+            this.run = null;
+        }
+        return this.run;
+    }
+
     saveRun() {
         write(KEY_RUN, this.run && this.run.phase !== 'over' ? this.run.toJSON() : null);
     }

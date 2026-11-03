@@ -27,6 +27,7 @@ import { BoardView } from './BoardView';
 import { ForgeView } from './ForgeView';
 import { buildOpponentStrip } from './OpponentStrip';
 import { buildHealthGrid, cardWords } from './views';
+import { finishRound, PlanningMessage } from './flow';
 const { ccclass } = _decorator;
 
 const MARGIN = 30;
@@ -40,8 +41,9 @@ export class PlanningScreen extends GameScreen {
     private dragLayer: Node | null = null;
 
     onShow(params?: unknown) {
-        const p = params as { run?: Run } | undefined;
+        const p = params as { run?: Run; message?: PlanningMessage } | undefined;
         this.run = p?.run ?? Game.run;
+        this.message = p?.message ?? null;
         if (!this.run) { ScreenManager.show('Title'); return; }
         screen.on('window-resize', this.rebuild, this);
         UiKit.ready.then(() => this.scheduleOnce(() => this.rebuild(), 0));
@@ -193,36 +195,11 @@ export class PlanningScreen extends GameScreen {
 
     private startRound() {
         const run = this.run!;
+        Game.saveRun();
         if (ScreenManager.show('Fight', { run })) return;
-
-        // No fight screen yet (stage 7): play the round instantly.
+        // No fight screen in ScreenManager: play the round instantly.
         const fight = run.startFight();
         fight.runToEnd();
-        const result = run.finishFight(fight);
-        Game.recordProgress();
-        const s = result.score;
-        console.log(`Round ${result.round} ${result.won ? 'won' : 'lost'} vs ${result.opponent} in ${fight.time.toFixed(1)} s (quick play until stage 7)`, s);
-        if (!result.won) {
-            if (!ScreenManager.show('RunOver', { result })) {
-                Game.endRun();
-                console.log(`Run over at round ${result.round}, score ${run.score}. (Run over screen comes in stage 8.)`);
-                ScreenManager.show('Title');
-            }
-            return;
-        }
-        if (ScreenManager.show('RoundWon', { run, result })) return;
-
-        // No reward screen yet (stage 8): take their best card and the Cards reward.
-        const best = [...run.takeableCards()].sort((a, b) => b.rank - a.rank)[0];
-        const took = run.takeCard(best.id);
-        const gained = run.chooseReward({ kind: 'cards' });
-        console.log(`Quick play reward: took the ${cardWords(took)}; new cards: ${gained.map(cardWords).join(', ')}`);
-        Game.saveRun();
-        this.selected = null;
-        this.message = {
-            title: `Round ${result.round} won · +${s.total.toLocaleString('en-US')}`,
-            body: `Took the ${cardWords(took)} and 3 new cards (see the stash). ${s.cellsLeft}/${s.cellsTotal} cells left.`,
-        };
-        this.rebuild();
+        finishRound(run, fight);
     }
 }

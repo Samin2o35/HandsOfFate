@@ -461,6 +461,10 @@
       {
         "__uuid__": "56bf19cd-02d6-457e-b680-98df1f9cb623",
         "__expectedType__": "cc.Prefab"
+      },
+      {
+        "__uuid__": "fb66885f-3e71-4982-9259-9137d9040d67",
+        "__expectedType__": "cc.Prefab"
       }
     ],
     "firstScreen": "Title",
@@ -645,6 +649,22 @@
     ],
     "cellAlive": {
       "__uuid__": "9196f74b-219b-41b2-87b2-e6390e0e0e61@f9941",
+      "__expectedType__": "cc.SpriteFrame"
+    },
+    "cellLost": {
+      "__uuid__": "56fb883d-35e9-4a6d-be8e-f84705677e46@f9941",
+      "__expectedType__": "cc.SpriteFrame"
+    },
+    "cellRotted": {
+      "__uuid__": "da18afd5-93ce-478c-a80a-8fe401f1ee1c@f9941",
+      "__expectedType__": "cc.SpriteFrame"
+    },
+    "ringWhite": {
+      "__uuid__": "5495ae3e-030c-45a9-a3f6-93b4d39bc47b@f9941",
+      "__expectedType__": "cc.SpriteFrame"
+    },
+    "spark": {
+      "__uuid__": "049072a4-e084-4acd-a072-f80ddece8c28@f9941",
       "__expectedType__": "cc.SpriteFrame"
     },
     "barTrack": {

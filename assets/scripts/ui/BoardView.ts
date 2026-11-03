@@ -53,6 +53,11 @@ export class BoardView {
 
     private slots: { node: Node; row: number; col: number }[] = [];
     private views: CardView[] = [];
+
+    /** The card view for a card id (fight screen: make a hand's cards glow). */
+    viewFor(cardId: number): CardView | null {
+        return this.views.find((v) => v.card?.id === cardId) ?? null;
+    }
     private drag: { view: CardView; start: Vec2; dragging: boolean; home: Node; homePos: Vec3 } | null = null;
 
     constructor(
@@ -66,7 +71,7 @@ export class BoardView {
         private interactive = true,
     ) {
         this.root = makeNode(screen, 'Board', layout.width, layout.height, { x: layout.left, y: layout.top, anchorX: 0, anchorY: 1 });
-        this.stash = makeNode(screen, 'Stash', layout.stashWidth, layout.stashHeight, { x: layout.stashLeft, y: layout.stashTop, anchorX: 0, anchorY: 1 });
+        this.stash = makeNode(screen, 'Stash', Math.max(0, layout.stashWidth), Math.max(0, layout.stashHeight), { x: layout.stashLeft, y: layout.stashTop, anchorX: 0, anchorY: 1 });
         this.build();
     }
 
@@ -122,7 +127,7 @@ export class BoardView {
         this.colLabelsTop = this.layout.top + colTop;
         this.colLabelsHeight = colLabelH;
 
-        this.buildStash();
+        if (this.layout.stashWidth > 0) this.buildStash();
     }
 
     private buildStash() {

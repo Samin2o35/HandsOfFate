@@ -243,11 +243,39 @@ pill('bar_fill', CREAM)
 pill('bar_fill_gold', GOLD)
 
 
+# ---- Stage 7: fight screen pieces --------------------------------------------------
+
+LOST_FILL = hexc('120e1a')
+LOST_RIM = hexc('3d3450')
+ROT_FILL = hexc('1d3320')
+ROT_RIM = hexc('4fb067')
+SPENT = hexc('5a5470')
+WHITE = hexc('ffffff')
+
+cell('cell_lost', LOST_FILL, LOST_RIM)
+cell('cell_rotted', ROT_FILL, ROT_RIM)
+ring('ring_white', WHITE, 4)           # tinted in code: gold hit, pink heal, green rot, blue shield
+spark = Image.new('RGBA', (6, 6), WHITE)
+spark.save(os.path.join(UI, 'spark.png'))
+
+
+def spent_pip(suit):
+    """Grey silhouette of a pip, for spent heal / armor charges."""
+    pip = cut_pip(suit)
+    px = pip.load()
+    for y in range(pip.height):
+        for x in range(pip.width):
+            if px[x, y][3] > 0:
+                px[x, y] = SPENT
+    return pip
+
+
 if __name__ == '__main__':
     if not os.path.isdir(CARDS):
         sys.exit('Card art not found at assets/resources/cards/updated. Run from the project root.')
     for s in 'SHCD':
         cut_pip(s).save(os.path.join(ICONS, f'suit_{s}.png'))
+        spent_pip(s).save(os.path.join(ICONS, f'suit_{s}_spent.png'))
     with open(os.path.join(os.path.dirname(__file__), 'slices.json'), 'w') as f:
         json.dump(slices, f, indent=2)
     print(f'Wrote {len(slices)} UI images to assets/art/ui and 4 suit icons to assets/resources/ui/icons')
