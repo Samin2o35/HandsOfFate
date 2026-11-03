@@ -32,9 +32,9 @@ const pic = (s: 'player' | 'enemy') => healthToText(view[s]).replace(/\//g, ' ')
 console.log(`\n  start   you  ${pic('player')}\n          them ${pic('enemy')}\n`);
 
 for (const e of fight.runToEnd()) {
-    applyEffect(view[e.target], e.hand.effect, e.cells);
+    applyEffect(view[e.target], e.effect, e.cells);
     const who = e.side === 'player' ? 'you ' : 'them';
-    const what = `${e.hand.label} · ${EFFECT_NAME[e.hand.effect]}`.padEnd(30);
+    const what = `${e.label} · ${EFFECT_NAME[e.effect]}`.padEnd(30);
     const charges = Number.isFinite(e.chargesLeft) ? ` (${e.chargesLeft} left)` : '';
     console.log(`  ${e.time.toFixed(1).padStart(5)}s  ${who}  ${what} ${String(e.cells.length).padStart(2)} cells${charges.padEnd(10)}  → ${e.target === 'player' ? 'you ' : 'them'} ${pic(e.target)}`);
 }

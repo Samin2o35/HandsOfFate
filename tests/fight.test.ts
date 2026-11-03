@@ -114,7 +114,7 @@ describe('fight timing and charges', () => {
         const a = setup(); const evA = a.runToEnd();
         const b = setup(); const evB = [];
         while (!b.over) evB.push(...b.advance(1 / 60));
-        expect(evB.map((e) => `${e.side}:${e.handId}:${e.cells}`)).toEqual(evA.map((e) => `${e.side}:${e.handId}:${e.cells}`));
+        expect(evB.map((e) => `${e.side}:${e.sourceId}:${e.cells}`)).toEqual(evA.map((e) => `${e.side}:${e.sourceId}:${e.cells}`));
         expect(b.winner).toBe(a.winner);
     });
 
@@ -124,7 +124,7 @@ describe('fight timing and charges', () => {
             { hands: [hand('7S 7S 2D')], healthCells: 60 },
         );
         const events = f.runToEnd();
-        const heals = events.filter((e) => e.hand.effect === 'heal');
+        const heals = events.filter((e) => e.effect === 'heal');
         expect(heals).toHaveLength(3);
         // The first heal can only happen after the first enemy hit at 4 s.
         expect(heals[0].time).toBeCloseTo(4);
@@ -138,7 +138,7 @@ describe('fight timing and charges', () => {
             { hands: [hand('7S 7S 2D')], healthCells: 12 },
         );
         const ev = f.advance(4.01);
-        expect(ev.map((e) => [e.side, e.hand.effect])).toEqual([['player', 'armor'], ['enemy', 'attack']]);
+        expect(ev.map((e) => [e.side, e.effect])).toEqual([['player', 'armor'], ['enemy', 'attack']]);
         expect(healthToText(f.player.health)).toBe('OOOO/OOOO/OOOO'); // the hit only popped the shields
     });
 

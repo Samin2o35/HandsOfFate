@@ -10,11 +10,13 @@
 //  - Flush doubles its effect: the pattern is applied twice (one charge).
 //  - Heal/armor with nothing to do wait at "ready" and fire the moment they
 //    have a target, without wasting a charge.
-//  - Same instant: player hands go first, then the opponent's, each in hand order.
+//  - Same instant: player hands go first, then the opponent's, each in hand
+//    order, then boss twists.
 //  - The fight ends the instant a side has no living cells.
+// Boss twists plug in as FightModifiers (see bosses.ts).
 
 import { Hand } from './evaluate';
-import { EFFECT_CHARGES, HAND_INFO, HandCategory } from './hands';
+import { EFFECT_CHARGES, HAND_INFO, HandCategory, Effect } from './hands';
 import { HealthGrid, createHealthGrid, livingCount, isDead } from './health';
 import { pickTargets, applyEffect } from './patterns';
 
@@ -49,17 +51,35 @@ export interface HandState {
 
 export interface FightEvent {
     readonly time: number;
+    /** Who caused it. */
     readonly side: SideId;
     /** Whose grid it landed on. */
     readonly target: SideId;
-    readonly handId: string;
-    readonly hand: Hand;
+    /** A hand firing, or a boss twist. */
+    readonly kind: 'hand' | 'twist';
+    /** The hand that fired (null for twists). */
+    readonly hand: Hand | null;
+    /** Hand id, or the twist id ("execution", "secondWind", "blight"). */
+    readonly sourceId: string;
+    readonly effect: Effect;
+    /** "Pair 8s", "Execution", ... */
+    readonly label: string;
     /** Every cell the pattern covered (for the hit flash). */
     readonly area: readonly number[];
     /** Cells that actually changed. */
     readonly cells: readonly number[];
-    /** Charges left on this hand after firing (Infinity for attack/rot). */
+    /** Charges left on this hand after firing (Infinity for attack/rot and twists). */
     readonly chargesLeft: number;
+}
+
+/** A boss twist or other rule that acts during a fight. */
+export interface FightModifier {
+    /** Next game time it acts on its own (Infinity = never). */
+    nextTime(f: Fight): number;
+    /** Acts at nextTime; returns an event if anything changed. */
+    act(f: Fight): FightEvent | null;
+    /** Runs after every event, for triggers (e.g. Second Wind). */
+    afterEvent?(f: Fight, e: FightEvent): FightEvent | null;
 }
 
 export interface SideStats {
@@ -108,6 +128,8 @@ export class FightSide {
 export interface FightOptions {
     /** Safety stop in game-seconds; reaching it ends the fight as a loss. */
     readonly maxTime?: number;
+    /** Boss twists. */
+    readonly modifiers?: readonly FightModifier[];
 }
 
 export class Fight {
@@ -118,11 +140,13 @@ export class Fight {
     readonly player: FightSide;
     readonly enemy: FightSide;
     readonly maxTime: number;
+    readonly modifiers: readonly FightModifier[];
 
     constructor(player: FightSideSetup, enemy: FightSideSetup, options: FightOptions = {}) {
         this.player = new FightSide('player', player);
         this.enemy = new FightSide('enemy', enemy);
         this.maxTime = options.maxTime ?? 3600;
+        this.modifiers = options.modifiers ?? [];
     }
 
     side(id: SideId): FightSide { return id === 'player' ? this.player : this.enemy; }
@@ -141,15 +165,16 @@ export class Fight {
         if (this.over) return events;
         const until = this.time + dt;
         for (;;) {
-            const next = this.nextHand();
-            if (!next || next.nextFire > until) break;
-            this.time = Math.max(this.time, next.nextFire);
-            const event = this.fire(next);
-            if (event) {
-                events.push(event);
-                this.wakeWaiting();
-                if (this.checkEnd()) return events;
-            }
+            const hand = this.nextHand();
+            const mod = this.nextModifier();
+            const handTime = hand ? hand.nextFire : Infinity;
+            const modTime = mod ? mod.time : Infinity;
+            const at = Math.min(handTime, modTime);
+            if (at > until) break;
+            this.time = Math.max(this.time, at);
+            // Hands win ties with twists.
+            const event = handTime <= modTime + 1e-9 ? this.fire(hand!) : mod!.mod.act(this);
+            if (event && this.afterChange(event, events)) return events;
         }
         this.time = until;
         if (this.time >= this.maxTime) this.end('enemy', 'timeout');
@@ -160,14 +185,58 @@ export class Fight {
     runToEnd(): FightEvent[] {
         const events: FightEvent[] = [];
         while (!this.over) {
-            const next = this.nextHand();
-            const step = next && Number.isFinite(next.nextFire) ? Math.max(0, next.nextFire - this.time) : this.maxTime;
+            const hand = this.nextHand();
+            const mod = this.nextModifier();
+            const at = Math.min(hand ? hand.nextFire : Infinity, mod ? mod.time : Infinity);
+            const step = Number.isFinite(at) ? Math.max(0, at - this.time) : this.maxTime;
             events.push(...this.advance(Math.min(step, this.maxTime - this.time) + 1e-9));
         }
         return events;
     }
 
+    /**
+     * Applies an effect from outside a hand (boss twists) and records it.
+     * Returns the event, or null if no cell changed.
+     */
+    applyTwist(side: SideId, target: SideId, effect: Effect, cells: readonly number[], id: string, label: string): FightEvent | null {
+        const grid = this.side(target).health;
+        const stats = this.side(side).stats;
+        const changed = cells.filter((i) => {
+            const c = grid.cells[i];
+            if (effect === 'heal') return c.state === 'lost';
+            if (effect === 'armor') return c.state === 'alive' && !c.shield;
+            return c.state === 'alive';
+        });
+        if (changed.length === 0) return null;
+        for (const i of changed) {
+            const c = grid.cells[i];
+            if (effect === 'heal') stats.healed++;
+            else if (effect === 'armor') stats.shieldsAdded++;
+            else if (!c.shield) stats.damageDealt++;
+        }
+        applyEffect(grid, effect, changed);
+        return {
+            time: this.time, side, target, kind: 'twist', hand: null, sourceId: id, effect, label,
+            area: [...cells], cells: changed, chargesLeft: Infinity,
+        };
+    }
+
     // -----------------------------------------------------------------------
+
+    /** Records an event, runs triggers, wakes waiting hands. True if the fight ended. */
+    private afterChange(event: FightEvent, events: FightEvent[]): boolean {
+        events.push(event);
+        if (this.checkEnd()) return true;
+        for (const m of this.modifiers) {
+            const extra = m.afterEvent?.(this, event);
+            if (extra) {
+                events.push(extra);
+                if (this.checkEnd()) return true;
+            }
+        }
+        this.wakeWaiting();
+        return false;
+    }
 
     /** Earliest hand to fire; ties: player first, then hand order. */
     private nextHand(): HandState | null {
@@ -175,6 +244,15 @@ export class Fight {
         for (const h of [...this.player.hands, ...this.enemy.hands]) {
             if (h.charges <= 0 || h.waiting) continue;
             if (!best || h.nextFire < best.nextFire - 1e-9) best = h;
+        }
+        return best;
+    }
+
+    private nextModifier(): { mod: FightModifier; time: number } | null {
+        let best: { mod: FightModifier; time: number } | null = null;
+        for (const mod of this.modifiers) {
+            const t = mod.nextTime(this);
+            if (Number.isFinite(t) && (!best || t < best.time - 1e-9)) best = { mod, time: t };
         }
         return best;
     }
@@ -199,7 +277,6 @@ export class Fight {
                 h.waiting = true;
                 h.nextFire = Infinity;
             } else {
-                // Attack/rot with no living target can't happen (fight would be over); just reset.
                 h.lastFire = this.time;
                 h.nextFire = this.time + h.cooldown;
             }
@@ -216,7 +293,8 @@ export class Fight {
         if (!best || HAND_INFO[h.hand.category].strength > HAND_INFO[best].strength) me.stats.bestHand = h.hand.category;
 
         return {
-            time: this.time, side: h.side, target: targetSide.id, handId: h.hand.id, hand: h.hand,
+            time: this.time, side: h.side, target: targetSide.id, kind: 'hand', hand: h.hand,
+            sourceId: h.hand.id, effect: h.hand.effect, label: h.hand.label,
             area: [...new Set(area)], cells: [...new Set(changed)], chargesLeft: h.charges,
         };
     }

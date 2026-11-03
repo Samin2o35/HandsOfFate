@@ -4,6 +4,9 @@
 
   /* Add your custom configuration here. */
   "compilerOptions": {
-    "strict": false
+    "strict": false,
+    // VS Code's newer TypeScript warns about Cocos's "node10" setting. Cocos compiles
+    // with its own tools, so the warning is safe to silence.
+    "ignoreDeprecations": "6.0"
   }
 }
