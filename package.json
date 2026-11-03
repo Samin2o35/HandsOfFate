@@ -1,0 +1,14 @@
+{
+  "name": "HandsOfFate",
+  "uuid": "c8ee6098-644a-4ae8-b7c4-538f6364a44d",
+  "creator": {
+    "version": "3.8.6"
+  },
+  "scripts": {
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "vitest": "^5.1.0"
+  }
+}
