@@ -1,0 +1,80 @@
+{
+  "btn_red": [
+    9,
+    9,
+    9,
+    16
+  ],
+  "btn_red_pressed": [
+    9,
+    16,
+    9,
+    9
+  ],
+  "btn_cream": [
+    9,
+    9,
+    9,
+    16
+  ],
+  "btn_cream_pressed": [
+    9,
+    16,
+    9,
+    9
+  ],
+  "btn_blue": [
+    9,
+    9,
+    9,
+    16
+  ],
+  "btn_blue_pressed": [
+    9,
+    16,
+    9,
+    9
+  ],
+  "btn_dark": [
+    9,
+    9,
+    9,
+    16
+  ],
+  "btn_dark_pressed": [
+    9,
+    16,
+    9,
+    9
+  ],
+  "btn_disabled": [
+    9,
+    9,
+    9,
+    16
+  ],
+  "btn_disabled_pressed": [
+    9,
+    16,
+    9,
+    9
+  ],
+  "panel_cream": [
+    19,
+    19,
+    19,
+    29
+  ],
+  "panel_cream_single": [
+    9,
+    9,
+    9,
+    16
+  ],
+  "panel_dark": [
+    18,
+    18,
+    18,
+    24
+  ]
+}
