@@ -5,10 +5,12 @@
     "version": "3.8.6"
   },
   "scripts": {
-    "test": "vitest run"
+    "test": "vitest run",
+    "board": "tsx tools/board.ts"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",
+    "tsx": "^4.23.15",
     "vitest": "^5.1.0"
   }
 }

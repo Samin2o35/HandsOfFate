@@ -52,6 +52,24 @@ export function resetCardIds(start = 1): void {
     nextId = start;
 }
 
+const SUIT_FROM_TEXT: Record<string, Suit> = {
+    S: 'S', H: 'H', C: 'C', D: 'D', '♠': 'S', '♥': 'H', '♣': 'C', '♦': 'D',
+};
+const RANK_FROM_TEXT: Record<string, Rank> = { J: 11, Q: 12, K: 13, A: 14 };
+
+/**
+ * Reads a card from text: "10C", "10♣", "JS", "as", "3d".
+ * Handy for tests, debug tools and the tutorial deck. Throws on bad input.
+ */
+export function parseCard(text: string): Card {
+    const t = text.trim().toUpperCase();
+    const suit = SUIT_FROM_TEXT[t.slice(-1)];
+    const rankText = t.slice(0, -1);
+    const rank = RANK_FROM_TEXT[rankText] ?? Number(rankText);
+    if (!suit || !isRank(rank)) throw new Error(`Not a card: "${text}"`);
+    return makeCard(suit, rank);
+}
+
 // ---- Art lookup -----------------------------------------------------------
 // Paths are relative to assets/resources and match the renamed art pack:
 //   cards/updated/S_13  -> K♠ (Updated deck, used on grids, stash, Forge)
