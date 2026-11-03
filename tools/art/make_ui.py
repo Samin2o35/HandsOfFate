@@ -176,6 +176,73 @@ def cut_pip(suit):
     return out
 
 
+# ---- Stage 6: planning screen pieces ----------------------------------------------
+
+GOLD = hexc('e9c46a')         # cards that score in a hand, gold bars
+PINK = hexc('ff8fb0')         # the selected card
+SLOT = hexc('5c5763')         # dashed empty slot
+CELL_FILL = hexc('d2453c')    # health cell (alive)
+CELL_RIM = hexc('f2b0a8')
+BAR_TRACK = hexc('3d3450')
+
+
+def ring(name, colour, width, size=32):
+    """A rounded outline with a clear middle, laid around a card (9-slice)."""
+    img = Image.new('RGBA', (size, size), CLEAR)
+    rounded_rect(img, 0, 0, size - 1, size - 1, colour, corner=4)
+    px = img.load()
+    for y in range(width, size - width):
+        for x in range(width, size - width):
+            px[x, y] = CLEAR
+    b = width + 4
+    save(img, name, [b, b, b, b])
+
+
+def dashed_slot(name, w, h, line=3, dash=9, gap=6):
+    """Dashed outline of an empty card slot, drawn at one exact size (dashes don't stretch)."""
+    img = Image.new('RGBA', (w, h), CLEAR)
+    px = img.load()
+    perimeter = []
+    for x in range(2, w - 2): perimeter.append((x, 0, 'h'))
+    for y in range(2, h - 2): perimeter.append((w - 1, y, 'v'))
+    for x in range(w - 3, 1, -1): perimeter.append((x, h - 1, 'h'))
+    for y in range(h - 3, 1, -1): perimeter.append((0, y, 'v'))
+    for i, (x, y, d) in enumerate(perimeter):
+        if i % (dash + gap) >= dash:
+            continue
+        for t in range(line):
+            if d == 'h':
+                yy = y + t if y == 0 else y - t
+                px[x, yy] = SLOT
+            else:
+                xx = x - t if x == w - 1 else x + t
+                px[xx, y] = SLOT
+    img.save(os.path.join(UI, name + '.png'))
+
+
+def cell(name, fill, rim, size=30, rim_w=3):
+    img = Image.new('RGBA', (size, size), CLEAR)
+    rounded_rect(img, 0, 0, size - 1, size - 1, rim, corner=2)
+    rounded_rect(img, rim_w, rim_w, size - 1 - rim_w, size - 1 - rim_w, fill, corner=1)
+    img.save(os.path.join(UI, name + '.png'))
+
+
+def pill(name, colour, h=12, w=32):
+    img = Image.new('RGBA', (w, h), CLEAR)
+    rounded_rect(img, 0, 0, w - 1, h - 1, colour, corner=4)
+    save(img, name, [6, 0, 6, 0])
+
+
+ring('card_frame_gold', GOLD, 5)
+ring('card_frame_pink', PINK, 5)
+for label, (w, h) in {'2x': (180, 252), '1_5x': (135, 189), '1x': (90, 126), '0_5x': (45, 63)}.items():
+    dashed_slot(f'card_slot_{label}', w, h, line=3 if w >= 90 else 2, dash=9 if w >= 90 else 5, gap=6 if w >= 90 else 4)
+cell('cell_alive', CELL_FILL, CELL_RIM)
+pill('bar_track', BAR_TRACK)
+pill('bar_fill', CREAM)
+pill('bar_fill_gold', GOLD)
+
+
 if __name__ == '__main__':
     if not os.path.isdir(CARDS):
         sys.exit('Card art not found at assets/resources/cards/updated. Run from the project root.')

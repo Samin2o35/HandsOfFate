@@ -6,7 +6,7 @@
 // Screens read and change state through `Game`, never through localStorage directly.
 
 import { sys } from 'cc';
-import { Profile, newProfile } from '../core/achievements';
+import { Profile, newProfile, updateProfile, AceId } from '../core/achievements';
 import { Run } from '../core/run';
 
 export type Speed = 'slow' | 'medium' | 'fast';
@@ -82,6 +82,26 @@ class GameState {
         this.saveRun();
         this.saveProfile();
         return this.run;
+    }
+
+    /**
+     * Folds the run's progress into the profile (best score, best round, Aces)
+     * and saves both. Call after every finished round. Returns Aces earned just now.
+     */
+    recordProgress(): AceId[] {
+        if (!this.run) return [];
+        const earned = updateProfile(this.profile, this.run.data.progress);
+        this.saveProfile();
+        this.saveRun();
+        return earned;
+    }
+
+    /** The run is over: keep its records, drop the save. */
+    endRun(): AceId[] {
+        const earned = this.recordProgress();
+        this.run = null;
+        write(KEY_RUN, null);
+        return earned;
     }
 
     saveRun() {

@@ -1285,7 +1285,7 @@
     "_lpos": {
       "__type__": "cc.Vec3",
       "x": 0,
-      "y": -40,
+      "y": -35,
       "z": 0
     },
     "_lrot": {
@@ -1325,7 +1325,7 @@
     },
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 399.59954833984375,
+      "width": 532.7998046875,
       "height": 50.4
     },
     "_anchorPoint": {
@@ -1364,8 +1364,8 @@
     "_string": "Build poker hands. They fight for you.",
     "_horizontalAlign": 1,
     "_verticalAlign": 1,
-    "_actualFontSize": 27,
-    "_fontSize": 27,
+    "_actualFontSize": 36,
+    "_fontSize": 36,
     "_fontFamily": "Arial",
     "_lineHeight": 40,
     "_overflow": 0,
@@ -1555,6 +1555,8 @@
       "__id__": 0
     },
     "fileId": "28EGtN0TZKgZRtc0cWsXhg",
+    "instance": null,
+    "targetOverrides": null,
     "nestedPrefabInstanceRoots": null
   },
   {
@@ -3239,8 +3241,6 @@
       "__id__": 0
     },
     "fileId": "06URXYYN1DHYOI4NlyZsAq",
-    "instance": null,
-    "targetOverrides": null,
     "nestedPrefabInstanceRoots": null
   },
   {
