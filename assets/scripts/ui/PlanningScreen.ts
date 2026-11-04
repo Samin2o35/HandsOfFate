@@ -28,6 +28,8 @@ import { ForgeView } from './ForgeView';
 import { buildOpponentStrip } from './OpponentStrip';
 import { buildHealthGrid, cardWords } from './views';
 import { finishRound, PlanningMessage } from './flow';
+import { worldRect, unionRects } from './BoardView';
+import { tutorialStep, setTutorialStep, finishTutorial, showTutorial, suitLegend } from './Tutorial';
 const { ccclass } = _decorator;
 
 const MARGIN = 30;
@@ -39,6 +41,11 @@ export class PlanningScreen extends GameScreen {
     private message: { title: string; body: string } | null = null;
     private content: Node | null = null;
     private dragLayer: Node | null = null;
+    // Kept for the tutorial's spotlight.
+    private board: BoardView | null = null;
+    private forge: ForgeView | null = null;
+    private healthNode: Node | null = null;
+    private tutorial: Node | null = null;
 
     onShow(params?: unknown) {
         const p = params as { run?: Run; message?: PlanningMessage } | undefined;
@@ -87,7 +94,8 @@ export class PlanningScreen extends GameScreen {
         makeButton(root, 'StartRound', ButtonStyle.Red, 'START ROUND', innerW, startH, { x: 0, y: startY }, () => this.startRound(), FONT.button + 6);
         const forgeH = 140;
         const forgeY = startY + startH / 2 + 22 + (forgeH + 10) / 2;
-        new ForgeView(root, run, this.selected?.id ?? null, 0, forgeY, innerW + 20, forgeH, (made) => {
+        this.forge = new ForgeView(root, run, this.selected?.id ?? null, 0, forgeY, innerW + 20, forgeH, (made) => {
+            if (tutorialStep() === 6) finishTutorial();
             this.selected = made;
             this.message = { title: `Forged the ${cardWords(made)}`, body: 'The two cards became one. Done for this round.' };
             this.changed();
@@ -97,7 +105,7 @@ export class PlanningScreen extends GameScreen {
         // Board fills the space between the strip and the bottom block.
         const boardTop = stripTop - stripH - 18;
         const boardH = boardTop - youTop - 10;
-        const board = new BoardView(this.content, this.dragLayer!, run, {
+        const board = this.board = new BoardView(this.content, this.dragLayer!, run, {
             left: L, top: boardTop, width: innerW, height: boardH,
             stashLeft: L + 465, stashTop: youTop, stashWidth: innerW - 465, stashHeight: 165,
         }, {
@@ -110,6 +118,7 @@ export class PlanningScreen extends GameScreen {
         this.buildInfoBox(root, run, infoLeft, R, board.colLabelsTop, board.colLabelsHeight);
 
         this.buildYou(root, run, L, youTop);
+        this.showTutorialStep();
     }
 
     // ---- Parts ------------------------------------------------------------------
@@ -125,7 +134,7 @@ export class PlanningScreen extends GameScreen {
         makeLabel(plaque, 'Round', `ROUND ${run.round}`, { size: FONT.heading + 9, spacing: 2, color: COLOR.ink, y: 18 });
         makeLabel(plaque, 'Phase', run.isBoss ? 'Boss round · Planning' : 'Planning', { font: 'body', size: FONT.bodySmall, color: '#3D3450', y: -22 });
 
-        makeButton(root, 'Options', ButtonStyle.Dark, 'Options', 150, 87, { x: R - 75, y }, () => this.toTitle(), 27);
+        makeButton(root, 'Options', ButtonStyle.Dark, 'Options', 150, 87, { x: R - 75, y }, () => this.openOptions(), 27);
     }
 
     private buildInfoBox(root: Node, run: Run, left: number, right: number, top: number, h: number) {
@@ -178,7 +187,7 @@ export class PlanningScreen extends GameScreen {
         makeSprite(root, 'Avatar', kit.frame('concept/king_roughout'), 96, 144, { x: L + 48, y: top - 12 - 72 });
         const cells = run.data.healthCells;
         makeLabel(root, 'YouLabel', `YOU · ${cells} / ${cells}`, { size: FONT.labelSmall, spacing: 2, color: COLOR.lilac, align: 'left', x: L + 126, y: top - 12 });
-        buildHealthGrid(root, cells, 300, 120, L + 126, top - 36);
+        this.healthNode = buildHealthGrid(root, cells, 300, 120, L + 126, top - 36).node;
     }
 
     // ---- Actions ----------------------------------------------------------------
@@ -186,13 +195,68 @@ export class PlanningScreen extends GameScreen {
     /** After any change: save, then rebuild. */
     private changed() {
         Game.saveRun();
+        // Tutorial step 2 is done once row 3 is full.
+        if (tutorialStep() === 2 && this.run!.board().rows[2]?.full) setTutorialStep(3);
         this.rebuild();
     }
 
-    private toTitle() {
+    private openOptions() {
         Game.saveRun();
-        ScreenManager.show('Title');
+        if (!ScreenManager.show('Options', { back: 'Planning', backParams: { run: this.run } })) ScreenManager.show('Title');
     }
+
+    // ---- Tutorial (steps 1, 2, 3 and 6 happen here) ---------------------------------
+
+    private showTutorialStep() {
+        if (this.tutorial?.isValid) this.tutorial.destroy();
+        this.tutorial = null;
+        const run = this.run!;
+        let step = tutorialStep();
+        if (!step || run.phase !== 'planning') return;
+        // Steps 4–5 belong to the fight and the round won screen; past round 1 we're at step 6.
+        if (run.round >= 2 && step < 6) { setTutorialStep(6); step = 6; }
+        if (run.round === 1 && step === 2 && run.board().rows[2]?.full) { setTutorialStep(3); step = 3; }
+        const board = this.board!;
+        const again = () => this.showTutorialStep();
+
+        if (step === 1) {
+            this.tutorial = showTutorial(this.node, {
+                step, at: 'top', button: 'Continue',
+                spot: this.healthNode ? worldRect(this.healthNode) : null,
+                onButton: () => { setTutorialStep(2); again(); },
+            });
+        } else if (step === 2) {
+            this.tutorial = showTutorial(this.node, {
+                step, at: 'top', button: 'Place it',
+                spot: unionRects([board.rowRect(2), board.stashRect()]),
+                onButton: () => this.placeTen(),
+            });
+        } else if (step === 3) {
+            this.tutorial = showTutorial(this.node, {
+                step, at: 'top', button: 'Fight!',
+                spot: unionRects([board.colRect(2), ...board.labels.rows.map((l) => worldRect(l.node))]),
+                extra: suitLegend,
+                onButton: () => { setTutorialStep(4); this.startRound(); },
+            });
+        } else if (step === 6) {
+            this.tutorial = showTutorial(this.node, {
+                step, at: 'top', button: 'Finish',
+                spot: this.forge ? worldRect(this.forge.root) : null,
+                onButton: () => { finishTutorial(); again(); },
+            });
+        }
+    }
+
+    /** Step 2's button: moves the 10♣ (or the first stash card) into row 3's empty slot. */
+    private placeTen() {
+        const run = this.run!;
+        const g = run.grid;
+        const col = [0, 1, 2].find((c) => g.slots[2 * g.cols + c] === null);
+        const card = run.stash.find((c) => c.rank === 10 && c.suit === 'C') ?? run.stash[0];
+        if (col !== undefined && card) run.moveCard(card.id, { row: 2, col });
+        this.changed();
+    }
+
 
     private startRound() {
         const run = this.run!;

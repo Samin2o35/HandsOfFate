@@ -17,9 +17,14 @@ export const SPEED_NAME: Record<Speed, string> = { slow: 'Slow', medium: 'Medium
 
 export interface Settings {
     speed: Speed;
-    /** Set once the tutorial run has been played or skipped (stage 9). */
+    /** Set once the tutorial run has been played or skipped. */
     tutorialDone: boolean;
+    /** Tutorial step 1..6 while it runs (0 = not started). */
+    tutorialStep: number;
 }
+
+/** The tutorial run always uses this seed: its round 1 (Jack of Spades' table) is a fair first fight. */
+export const TUTORIAL_SEED = 51;
 
 const KEY_PROFILE = 'hof.profile';
 const KEY_SETTINGS = 'hof.settings';
@@ -46,7 +51,9 @@ function write(key: string, value: string | null) {
 
 class GameState {
     profile: Profile = newProfile();
-    settings: Settings = { speed: 'medium', tutorialDone: false };
+    settings: Settings = { speed: 'medium', tutorialDone: false, tutorialStep: 0 };
+    /** Aces earned since a screen last showed them (the celebration pops up once). */
+    pendingAces: AceId[] = [];
     run: Run | null = null;
     private loaded = false;
 
@@ -73,11 +80,15 @@ class GameState {
         return this.run !== null && this.run.phase !== 'over';
     }
 
-    /** Starts a new run (replacing any saved one) and saves it. */
+    /** Starts a new run (replacing any saved one) and saves it. The very first run is the tutorial. */
     newRun(): Run {
-        const seed = (Date.now() ^ Math.floor(Math.random() * 0x7fffffff)) >>> 0;
-        // The first run will be the tutorial once stage 9 adds it.
-        this.run = Run.newRun({ seed, tutorial: false });
+        const tutorial = !this.settings.tutorialDone;
+        const seed = tutorial ? TUTORIAL_SEED : (Date.now() ^ Math.floor(Math.random() * 0x7fffffff)) >>> 0;
+        if (tutorial) {
+            this.settings.tutorialStep = 1;
+            this.saveSettings();
+        }
+        this.run = Run.newRun({ seed, tutorial });
         this.profile.runs++;
         this.saveRun();
         this.saveProfile();
@@ -91,9 +102,34 @@ class GameState {
     recordProgress(): AceId[] {
         if (!this.run) return [];
         const earned = updateProfile(this.profile, this.run.data.progress);
+        this.pendingAces.push(...earned);
         this.saveProfile();
         this.saveRun();
         return earned;
+    }
+
+    /** Aces earned but not celebrated yet; clears the list. */
+    takePendingAces(): AceId[] {
+        const out = this.pendingAces;
+        this.pendingAces = [];
+        return out;
+    }
+
+    /** Replays the tutorial: a fresh tutorial run (replaces any saved run). */
+    startTutorial(): Run {
+        this.settings.tutorialDone = false;
+        return this.newRun();
+    }
+
+    /** Wipes best scores, Aces and the saved run; keeps the speed setting. */
+    resetProgress() {
+        this.profile = newProfile();
+        this.settings = { ...this.settings, tutorialDone: false, tutorialStep: 0 };
+        this.run = null;
+        this.pendingAces = [];
+        this.saveProfile();
+        this.saveSettings();
+        write(KEY_RUN, null);
     }
 
     /** The run is over: keep its records, drop the save. */

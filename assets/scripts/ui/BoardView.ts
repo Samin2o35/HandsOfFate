@@ -54,6 +54,31 @@ export class BoardView {
     private slots: { node: Node; row: number; col: number }[] = [];
     private views: CardView[] = [];
 
+    /** World rectangle of a slot (tutorial spotlight). */
+    slotRect(row: number, col: number): Rect | null {
+        const s = this.slots.find((x) => x.row === row && x.col === col);
+        return s ? worldRect(s.node) : null;
+    }
+
+    /** World rectangle of a whole row: its slots and its label. */
+    rowRect(row: number): Rect | null {
+        const parts = this.slots.filter((x) => x.row === row).map((x) => worldRect(x.node));
+        const label = this.labels.rows[row];
+        if (label) parts.push(worldRect(label.node));
+        return unionRects(parts);
+    }
+
+    /** World rectangle of a whole column: its slots and its label. */
+    colRect(col: number): Rect | null {
+        const parts = this.slots.filter((x) => x.col === col).map((x) => worldRect(x.node));
+        const label = this.labels.cols[col];
+        if (label) parts.push(worldRect(label.node));
+        return unionRects(parts);
+    }
+
+    /** World rectangle of the stash. */
+    stashRect(): Rect { return worldRect(this.stash); }
+
     /** The card view for a card id (fight screen: make a hand's cards glow). */
     viewFor(cardId: number): CardView | null {
         return this.views.find((v) => v.card?.id === cardId) ?? null;
@@ -214,6 +239,18 @@ export class BoardView {
     }
 }
 
-function worldRect(n: Node): Rect {
+export function worldRect(n: Node): Rect {
     return n.getComponent(UITransform)!.getBoundingBoxToWorld();
+}
+
+/** Smallest rectangle around all of them (null for none). */
+export function unionRects(rects: (Rect | null)[]): Rect | null {
+    const list = rects.filter((r): r is Rect => !!r);
+    if (list.length === 0) return null;
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const r of list) {
+        x0 = Math.min(x0, r.x); y0 = Math.min(y0, r.y);
+        x1 = Math.max(x1, r.x + r.width); y1 = Math.max(y1, r.y + r.height);
+    }
+    return new Rect(x0, y0, x1 - x0, y1 - y0);
 }

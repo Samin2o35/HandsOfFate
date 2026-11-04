@@ -6,9 +6,9 @@
 // Stage 5 behaviour (the rest arrives in later stages):
 //   New Run      starts and saves a run; Continue then shows "Round 1"
 //   Continue     greyed out without a saved run; shows the planning screen in stage 6
-//   How to play  stage 9 (tutorial)
-//   Options      cycles the speed Slow → Medium → Fast and saves it
-//   Achievements stage 9
+//   How to play  plays the tutorial run (asks before replacing a saved run)
+//   Options      the Options screen
+//   Achievements the four Aces
 //   Quit         only shown on Android builds (iOS and web apps don't quit)
 
 import { _decorator, Label, game, sys, Button } from 'cc';
@@ -16,6 +16,7 @@ import { GameScreen } from './GameScreen';
 import { UiButton } from './UiButton';
 import { Game, SPEED_NAME } from '../app/Game';
 import { ScreenManager } from '../app/ScreenManager';
+import { confirmBox } from './Modal';
 const { ccclass, property } = _decorator;
 
 @ccclass('TitleScreen')
@@ -70,17 +71,21 @@ export class TitleScreen extends GameScreen {
         ScreenManager.show('Planning', { run });
     }
 
+    /** How to play = the tutorial run (asks first if it would replace a saved run). */
     onHowToPlay() {
-        if (!ScreenManager.show('Tutorial')) console.log('How to play: the tutorial comes in stage 9');
+        const start = () => ScreenManager.show('Planning', { run: Game.startTutorial() });
+        if (Game.canContinue) confirmBox(this.node, 'PLAY THE TUTORIAL?', 'This starts the tutorial run and replaces your saved run.', 'Play it', 'Cancel', start);
+        else start();
     }
 
     onOptions() {
-        Game.cycleSpeed();
+        if (ScreenManager.show('Options', { back: 'Title' })) return;
+        Game.cycleSpeed(); // no Options screen yet: the button just cycles the speed
         this.refresh();
     }
 
     onAchievements() {
-        if (!ScreenManager.show('Achievements')) console.log('Achievements: comes in stage 9');
+        ScreenManager.show('Achievements');
     }
 
     onQuit() {

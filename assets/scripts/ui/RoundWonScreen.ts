@@ -17,6 +17,8 @@ import { ButtonStyle, UiButton } from './UiButton';
 import { CardView, CARD_W, CARD_H, cardWords } from './views';
 import { buildTopBar, dashedLine, statRow } from './parts';
 import { PlanningMessage } from './flow';
+import { tutorialStep, setTutorialStep, showTutorial } from './Tutorial';
+import { celebrateAces } from './Modal';
 const { ccclass } = _decorator;
 
 const MARGIN = 30;
@@ -36,7 +38,19 @@ export class RoundWonScreen extends GameScreen {
         this.run = p?.run ?? Game.run;
         this.result = p?.result ?? this.run?.data.lastResult ?? null;
         if (!this.run || !this.result || this.run.phase !== 'reward') { ScreenManager.show('Title'); return; }
-        UiKit.ready.then(() => this.scheduleOnce(() => this.build(), 0));
+        UiKit.ready.then(() => this.scheduleOnce(() => {
+            this.build();
+            celebrateAces(this.node, Game.takePendingAces(), () => this.tutorialStep5());
+        }, 0));
+    }
+
+    /** Tutorial step 5: explain the two picks (the Dealer sits over the score). */
+    private tutorialStep5() {
+        if (tutorialStep() !== 5) return;
+        const overlay = showTutorial(this.node, {
+            step: 5, at: 'top', button: 'Got it', spot: null,
+            onButton: () => { setTutorialStep(6); if (overlay.isValid) overlay.destroy(); },
+        });
     }
 
     private build() {
@@ -210,6 +224,7 @@ export class RoundWonScreen extends GameScreen {
     private goNext() {
         const run = this.run!;
         if (this.takeId === null || !this.choice) return;
+        if (tutorialStep() === 5) setTutorialStep(6);
         const took = run.takeCard(this.takeId);
         const gained = run.chooseReward(this.choice);
         Game.saveRun();

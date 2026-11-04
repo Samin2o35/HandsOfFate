@@ -477,6 +477,14 @@
       {
         "__uuid__": "4091ede7-718a-4519-b3a0-d197f0286060",
         "__expectedType__": "cc.Prefab"
+      },
+      {
+        "__uuid__": "5bfda986-1f9e-40b5-8e12-d751c08137f4",
+        "__expectedType__": "cc.Prefab"
+      },
+      {
+        "__uuid__": "5c15e78a-691d-4455-93b3-7eeafda2f19e",
+        "__expectedType__": "cc.Prefab"
       }
     ],
     "firstScreen": "Title",

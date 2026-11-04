@@ -32,6 +32,8 @@ import { buildOpponentStrip } from './OpponentStrip';
 import { buildHealthGrid, paintHealth, shortName, HealthGridParts, HandLabelParts } from './views';
 import { flashRing, sparks, floatText, shake, blink, FX_COLOR } from './fx';
 import { finishRound } from './flow';
+import { worldRect } from './BoardView';
+import { tutorialStep, setTutorialStep, showTutorial } from './Tutorial';
 const { ccclass } = _decorator;
 
 const MARGIN = 30;
@@ -263,6 +265,18 @@ export class FightScreen extends GameScreen {
             this.popBanner(e, diff);
         }
         this.addFeed(e, diff);
+
+        // Tutorial step 4: pause on your first heal or armor and explain charges.
+        if (tutorialStep() === 4 && e.kind === 'hand' && e.side === 'player' && (e.effect === 'heal' || e.effect === 'armor') && !this.paused) {
+            const label = this.labelFor.get(e.sourceId);
+            this.paused = true;
+            const overlay = showTutorial(this.node, {
+                step: 4, at: 'bottom', button: 'Continue',
+                spot: label ? worldRect(label.node) : null,
+                onButton: () => { setTutorialStep(5); if (overlay.isValid) overlay.destroy(); this.paused = false; },
+                onSkip: () => { this.paused = false; },
+            });
+        }
     }
 
     private cellEffects(parts: HealthGridParts, e: FightEvent, d: Diff) {
@@ -366,6 +380,7 @@ export class FightScreen extends GameScreen {
 
     private end() {
         this.ending = true;
+        if (tutorialStep() === 4) setTutorialStep(5);
         const f = this.fight!;
         const won = f.winner === 'player';
         const kit = UiKit.get();

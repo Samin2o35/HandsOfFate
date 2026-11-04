@@ -14,6 +14,7 @@ import { UiKit, makeNode, makeSprite, makeLabel, makeButton, clearChildren, FONT
 import { ButtonStyle } from './UiButton';
 import { CARD_W, CARD_H } from './views';
 import { dashedLine, statRow } from './parts';
+import { celebrateAces } from './Modal';
 const { ccclass } = _decorator;
 
 const MARGIN = 30;
@@ -30,8 +31,12 @@ export class RunOverScreen extends GameScreen {
         this.run = p?.run ?? Game.run;
         this.result = p?.result ?? this.run?.data.lastResult ?? null;
         if (!this.run) { ScreenManager.show('Title'); return; }
-        this.earned = Game.endRun();
-        UiKit.ready.then(() => this.scheduleOnce(() => this.build(), 0));
+        Game.endRun();
+        this.earned = Game.takePendingAces();
+        UiKit.ready.then(() => this.scheduleOnce(() => {
+            this.build();
+            celebrateAces(this.node, this.earned);
+        }, 0));
     }
 
     private build() {
