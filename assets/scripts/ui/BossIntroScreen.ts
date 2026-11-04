@@ -12,7 +12,7 @@ import { Suit, SUIT_COLOR_HEX } from '../core/cards';
 import { BOSSES, twistText, twistChange, meetingText, tierNumeral } from '../core/bosses';
 import { UiKit, makeNode, makeSprite, makeLabel, makeButton, clearChildren, textWidth, FONT, COLOR } from './UiKit';
 import { ButtonStyle } from './UiButton';
-import { AnimatedCard } from './AnimatedCard';
+import { buildAvatar } from './views';
 import { buildOpponentStrip } from './OpponentStrip';
 import { buildTopBar } from './parts';
 import { PlanningMessage } from './flow';
@@ -60,10 +60,7 @@ export class BossIntroScreen extends GameScreen {
         const glow = makeSprite(root, 'Glow', kit.ringWhite, 300, 408, { y: kingY }, true);
         glow.color = new Color().fromHEX(suitColor);
         tween(glow.node).repeatForever(tween(glow.node).to(0.9, { scale: new Vec3(1.04, 1.04, 1) }).to(0.9, { scale: new Vec3(1, 1, 1) })).start();
-        const king = makeSprite(root, 'King', kit.classicFrame({ suit: boss.suit, rank: 13 }), 270, 378, { y: kingY });
-        const anim = king.node.addComponent(AnimatedCard);
-        anim.strip = `anim/${boss.suit}_13`;
-        anim.randomStart = false;
+        buildAvatar(root, 'King', { suit: boss.suit, rank: 13 }, true, 270, 378, { y: kingY });
 
         // Name plaque.
         const nameTop = T - 570, nameH = 130;

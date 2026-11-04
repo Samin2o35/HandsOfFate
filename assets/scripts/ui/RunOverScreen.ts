@@ -12,7 +12,7 @@ import { HAND_INFO } from '../core/hands';
 import { ACES, AceId, closestAce } from '../core/achievements';
 import { UiKit, makeNode, makeSprite, makeLabel, makeButton, clearChildren, FONT, COLOR } from './UiKit';
 import { ButtonStyle } from './UiButton';
-import { CARD_W, CARD_H } from './views';
+import { CARD_W, CARD_H, buildAvatar } from './views';
 import { dashedLine, statRow } from './parts';
 import { celebrateAces } from './Modal';
 const { ccclass } = _decorator;
@@ -80,7 +80,7 @@ export class RunOverScreen extends GameScreen {
         });
         const o = run.opponent;
         const avatarY = -statsH / 2 + 70;
-        makeSprite(stats, 'Avatar', kit.classicFrame(o.avatar), CARD_W * 0.75, CARD_H * 0.75, { x: x0 + 34, y: avatarY });
+        buildAvatar(stats, 'Avatar', o.avatar, !!o.boss, CARD_W * 0.75, CARD_H * 0.75, { x: x0 + 34, y: avatarY });
         makeLabel(stats, 'BeatenBy', 'Beaten by', { font: 'body', size: FONT.bodySmall, color: '#3D3450', align: 'left', x: x0 + 90, y: avatarY + 18 });
         makeLabel(stats, 'Who', this.result?.opponent ?? o.name, { size: FONT.label + 6, color: COLOR.ink, align: 'left', x: x0 + 90, y: avatarY - 16 });
 

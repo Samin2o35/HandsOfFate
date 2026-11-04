@@ -7,7 +7,7 @@ import { Opponent, opponentHealth } from '../core/opponents';
 import { evaluateBoard } from '../core/evaluate';
 import { HealthGrid } from '../core/health';
 import { UiKit, makeNode, makeSprite, makeLabel, textWidth, FONT, COLOR } from './UiKit';
-import { buildMiniBoard, buildHealthGrid, shortName, cooldownText, HealthGridParts } from './views';
+import { buildMiniBoard, buildHealthGrid, shortName, cooldownText, HealthGridParts, buildAvatar } from './views';
 
 export interface OpponentStripParts {
     node: Node;
@@ -20,10 +20,11 @@ export function buildOpponentStrip(parent: Node, o: Opponent, x: number, y: numb
     const node = makeNode(parent, 'Opponent', w, h, { x, y, anchorX: 0, anchorY: 1 });
     makeSprite(node, 'Panel', kit.panelDark, w, h + 6, { x: w / 2, y: -(h + 6) / 2 }, true);
 
-    // Avatar: the Classic face card (bosses: their King). The boss intro hides it.
+    // Avatar: the Classic face card; bosses: their animated King, as on the boss intro.
+    // The boss intro hides it.
     const aw = 135, ah = 189;
     if (showAvatar) {
-        makeSprite(node, 'Avatar', kit.classicFrame(o.avatar), aw, ah, { x: 33 + aw / 2, y: -30 - ah / 2 });
+        buildAvatar(node, 'Avatar', o.avatar, !!o.boss, aw, ah, { x: 33 + aw / 2, y: -30 - ah / 2 });
         makeLabel(node, 'AvatarLabel', o.boss ? 'BOSS' : 'OPPONENT', { size: FONT.labelSmall, spacing: 2, color: COLOR.lilac, x: 33 + aw / 2, y: -30 - ah - 24 });
     }
 

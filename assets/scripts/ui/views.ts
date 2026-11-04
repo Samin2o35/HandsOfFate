@@ -13,6 +13,7 @@ import { Hand } from '../core/evaluate';
 import { HAND_INFO, HandCategory, EFFECT_NAME, EFFECT_CHARGES } from '../core/hands';
 import { HealthGrid, healthCols } from '../core/health';
 import { UiKit, makeNode, makeSprite, makeLabel, FONT, COLOR, caps, textWidth } from './UiKit';
+import { AnimatedCard } from './AnimatedCard';
 const { ccclass } = _decorator;
 
 /** Card size at 1× art. */
@@ -251,4 +252,21 @@ export function buildMiniBoard(parent: Node, g: Grid, maxW: number, maxH: number
 export function sizeOf(n: Node): { w: number; h: number } {
     const ut = n.getComponent(UITransform)!;
     return { w: ut.width, h: ut.height };
+}
+
+/**
+ * An opponent's portrait. Normal tables: their Classic face card. Bosses: their
+ * King from the animated set, the same art the boss intro shows. The Updated
+ * King is frame 1 of that strip, so it stands in while the strip loads.
+ */
+export function buildAvatar(parent: Node, name: string, avatar: Pick<Card, 'suit' | 'rank'>, boss: boolean,
+    w: number, h: number, pos: { x?: number; y?: number } = {}): Sprite {
+    const kit = UiKit.get();
+    if (!boss) return makeSprite(parent, name, kit.classicFrame(avatar), w, h, pos);
+    const king = { suit: avatar.suit, rank: 13 as Rank };
+    const sprite = makeSprite(parent, name, kit.cardFrame(king), w, h, pos);
+    const anim = sprite.node.addComponent(AnimatedCard);
+    anim.strip = `anim/${king.suit}_13`;
+    anim.randomStart = false;
+    return sprite;
 }
