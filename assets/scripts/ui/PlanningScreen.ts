@@ -45,6 +45,7 @@ export class PlanningScreen extends GameScreen {
         this.run = p?.run ?? Game.run;
         this.message = p?.message ?? null;
         if (!this.run) { ScreenManager.show('Title'); return; }
+        if (this.run.phase === 'reward' && ScreenManager.show('RoundWon', { run: this.run })) return;
         screen.on('window-resize', this.rebuild, this);
         UiKit.ready.then(() => this.scheduleOnce(() => this.rebuild(), 0));
     }

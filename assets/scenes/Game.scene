@@ -465,6 +465,18 @@
       {
         "__uuid__": "fb66885f-3e71-4982-9259-9137d9040d67",
         "__expectedType__": "cc.Prefab"
+      },
+      {
+        "__uuid__": "d4a6739c-9529-4501-b6e9-4a864a8d852d",
+        "__expectedType__": "cc.Prefab"
+      },
+      {
+        "__uuid__": "078d3c12-7989-4e0c-af8c-c0c156b312dc",
+        "__expectedType__": "cc.Prefab"
+      },
+      {
+        "__uuid__": "4091ede7-718a-4519-b3a0-d197f0286060",
+        "__expectedType__": "cc.Prefab"
       }
     ],
     "firstScreen": "Title",

@@ -15,19 +15,23 @@ export interface OpponentStripParts {
 }
 
 /** Builds the strip with its top-left corner at (x, y). */
-export function buildOpponentStrip(parent: Node, o: Opponent, x: number, y: number, w: number, h: number, health?: HealthGrid): OpponentStripParts {
+export function buildOpponentStrip(parent: Node, o: Opponent, x: number, y: number, w: number, h: number, health?: HealthGrid, showAvatar = true): OpponentStripParts {
     const kit = UiKit.get();
     const node = makeNode(parent, 'Opponent', w, h, { x, y, anchorX: 0, anchorY: 1 });
     makeSprite(node, 'Panel', kit.panelDark, w, h + 6, { x: w / 2, y: -(h + 6) / 2 }, true);
 
-    // Avatar: the Classic face card (bosses: their King).
+    // Avatar: the Classic face card (bosses: their King). The boss intro hides it.
     const aw = 135, ah = 189;
-    makeSprite(node, 'Avatar', kit.classicFrame(o.avatar), aw, ah, { x: 33 + aw / 2, y: -30 - ah / 2 });
-    makeLabel(node, 'AvatarLabel', o.boss ? 'BOSS' : 'OPPONENT', { size: FONT.labelSmall, spacing: 2, color: COLOR.lilac, x: 33 + aw / 2, y: -30 - ah - 24 });
+    if (showAvatar) {
+        makeSprite(node, 'Avatar', kit.classicFrame(o.avatar), aw, ah, { x: 33 + aw / 2, y: -30 - ah / 2 });
+        makeLabel(node, 'AvatarLabel', o.boss ? 'BOSS' : 'OPPONENT', { size: FONT.labelSmall, spacing: 2, color: COLOR.lilac, x: 33 + aw / 2, y: -30 - ah - 24 });
+    }
 
     // Name, then their board and their hands side by side.
-    const left = 33 + aw + 30;
-    makeLabel(node, 'Name', o.name, { size: FONT.heading, color: COLOR.cream, align: 'left', x: left, y: -42 });
+    const left = showAvatar ? 33 + aw + 30 : 33;
+    makeLabel(node, 'Name', showAvatar ? o.name : (o.boss ? 'HIS TABLE' : 'THEIR TABLE'), showAvatar
+        ? { size: FONT.heading, color: COLOR.cream, align: 'left', x: left, y: -42 }
+        : { size: FONT.labelSmall, spacing: 2, color: COLOR.lilac, align: 'left', x: left, y: -36 });
     const boardTop = -72;
     const mini = buildMiniBoard(node, o.grid, 230, h - 72 - 24, left, boardTop);
 

@@ -63,8 +63,11 @@ export class TitleScreen extends GameScreen {
     }
 
     onContinue() {
-        if (!Game.run) return;
-        if (!ScreenManager.show('Planning', { run: Game.run })) console.log(`Continue: round ${Game.run.round} (planning screen comes in stage 6)`);
+        const run = Game.run;
+        if (!run) return;
+        // Pick up where the run was saved: at the rewards, or at planning.
+        if (run.phase === 'reward' && ScreenManager.show('RoundWon', { run })) return;
+        ScreenManager.show('Planning', { run });
     }
 
     onHowToPlay() {

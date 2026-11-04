@@ -270,12 +270,66 @@ def spent_pip(suit):
     return pip
 
 
+# ---- Stage 8: reward icons (round won screen) -------------------------------------
+
+def from_rows(rows, palette, scale):
+    """Pixel art from text rows; each character is one art pixel."""
+    h, w = len(rows), len(rows[0])
+    img = Image.new('RGBA', (w * scale, h * scale), CLEAR)
+    px = img.load()
+    for y, row in enumerate(rows):
+        for x, ch in enumerate(row):
+            c = palette.get(ch)
+            if c is None:
+                continue
+            for dy in range(scale):
+                for dx in range(scale):
+                    px[x * scale + dx, y * scale + dy] = c
+    return img
+
+
+HEART_ROWS = [
+    '..OOO...OOO..',
+    '.ORRRO.ORRRO.',
+    'ORRWRROORRRRO',
+    'ORWRRRRRRRRRO',
+    'ORRRRRRRRRRRO',
+    '.ORRRRRRRRRO.',
+    '..ORRRRRRRO..',
+    '...ORRRRRO...',
+    '....ORRRO....',
+    '.....ORO.....',
+    '......O......',
+]
+GRID_ROWS = [
+    'DDDD.DDDD.DDDD',
+    'DDDD.DDDD.DDDD',
+    'DDDD.DDDD.DDDD',
+    '..............',
+    'DDDD.DDDD.DDDD',
+    'DDDD.DDDD.DDDD',
+    'DDDD.DDDD.DDDD',
+    '..............',
+    'GGGG.GGGG.GGGG',
+    'GGGG.GGGG.GGGG',
+    'GGGG.GGGG.GGGG',
+]
+
+
+def reward_icons():
+    heart = from_rows(HEART_ROWS, {'O': hexc('120e1a'), 'R': hexc('d2453c'), 'W': hexc('f2b0a8')}, 5)
+    grid = from_rows(GRID_ROWS, {'D': hexc('3d3450'), 'G': hexc('e9c46a')}, 5)
+    heart.save(os.path.join(ICONS, 'reward_health.png'))
+    grid.save(os.path.join(ICONS, 'reward_grid.png'))
+
+
 if __name__ == '__main__':
     if not os.path.isdir(CARDS):
         sys.exit('Card art not found at assets/resources/cards/updated. Run from the project root.')
     for s in 'SHCD':
         cut_pip(s).save(os.path.join(ICONS, f'suit_{s}.png'))
         spent_pip(s).save(os.path.join(ICONS, f'suit_{s}_spent.png'))
+    reward_icons()
     with open(os.path.join(os.path.dirname(__file__), 'slices.json'), 'w') as f:
         json.dump(slices, f, indent=2)
     print(f'Wrote {len(slices)} UI images to assets/art/ui and 4 suit icons to assets/resources/ui/icons')

@@ -86,7 +86,7 @@ export class UiKit extends Component {
     }
 
     private preload(): Promise<void> {
-        const paths: string[] = [CARD_BACK_PATH, 'concept/king_roughout'];
+        const paths: string[] = [CARD_BACK_PATH, 'concept/king_roughout', 'concept/king_fallen_1x', 'ui/icons/reward_health', 'ui/icons/reward_grid'];
         for (const suit of SUITS) {
             paths.push(`ui/icons/suit_${suit}`);
             paths.push(`ui/icons/suit_${suit}_spent`);
