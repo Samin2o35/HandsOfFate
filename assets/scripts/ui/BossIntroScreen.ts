@@ -4,6 +4,7 @@
 // and his table. FACE HIM goes on to planning.
 
 import { _decorator, Node, UITransform, Widget, Color, tween, Vec3 } from 'cc';
+import { Sound } from '../app/Sound';
 import { GameScreen } from './GameScreen';
 import { Game } from '../app/Game';
 import { ScreenManager } from '../app/ScreenManager';
@@ -34,6 +35,8 @@ export class BossIntroScreen extends GameScreen {
         this.run = p?.run ?? Game.run;
         this.message = p?.message;
         if (!this.run || !this.run.opponent.boss) { ScreenManager.show('Planning', { run: this.run }); return; }
+        Sound.music('boss');
+        Sound.play('boss');
         UiKit.ready.then(() => this.scheduleOnce(() => this.build(), 0));
     }
 
@@ -60,7 +63,10 @@ export class BossIntroScreen extends GameScreen {
         const glow = makeSprite(root, 'Glow', kit.ringWhite, 300, 408, { y: kingY }, true);
         glow.color = new Color().fromHEX(suitColor);
         tween(glow.node).repeatForever(tween(glow.node).to(0.9, { scale: new Vec3(1.04, 1.04, 1) }).to(0.9, { scale: new Vec3(1, 1, 1) })).start();
-        buildAvatar(root, 'King', { suit: boss.suit, rank: 13 }, true, 270, 378, { y: kingY });
+        const king = buildAvatar(root, 'King', { suit: boss.suit, rank: 13 }, true, 270, 378, { y: kingY }).node;
+        // He drops in.
+        king.setScale(1.25, 1.25, 1);
+        tween(king).to(0.3, { scale: new Vec3(1, 1, 1) }, { easing: 'backOut' }).start();
 
         // Name plaque.
         const nameTop = T - 570, nameH = 130;

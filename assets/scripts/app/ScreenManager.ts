@@ -8,6 +8,7 @@
 import { _decorator, Component, Node, Prefab, instantiate, UIOpacity, tween } from 'cc';
 import { GameScreen } from '../ui/GameScreen';
 import { Game } from './Game';
+import { Sound } from './Sound';
 const { ccclass, property } = _decorator;
 
 @ccclass('ScreenManager')
@@ -32,6 +33,7 @@ export class ScreenManager extends Component {
     onLoad() {
         ScreenManager.instance = this;
         Game.load();
+        if (!this.getComponent(Sound)) this.addComponent(Sound);
     }
 
     start() {

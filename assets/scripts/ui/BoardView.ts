@@ -5,7 +5,8 @@
 //  - Drag a grid card onto the stash to take it off the board.
 // Every change goes through run.moveCard(), then the screen rebuilds.
 
-import { Node, EventTouch, UITransform, Vec2, Vec3, Rect } from 'cc';
+import { Node, EventTouch, UITransform, Vec2, Vec3, Rect, tween } from 'cc';
+import { Sound } from '../app/Sound';
 import { Run } from '../core/run';
 import { Card } from '../core/cards';
 import { BoardResult } from '../core/evaluate';
@@ -17,8 +18,8 @@ import {
 const DRAG_START = 12; // px of movement before a touch becomes a drag
 
 export interface BoardCallbacks {
-    /** A card was moved: save and rebuild. */
-    changed: () => void;
+    /** A card was moved (its id): save and rebuild. */
+    changed: (movedId?: number) => void;
     /** Selection changed (null = none). */
     selected: (card: Card | null) => void;
 }
@@ -82,6 +83,23 @@ export class BoardView {
     /** The card view for a card id (fight screen: make a hand's cards glow). */
     viewFor(cardId: number): CardView | null {
         return this.views.find((v) => v.card?.id === cardId) ?? null;
+    }
+
+    /** A little bounce on one card (just dropped or just forged). */
+    pop(cardId: number) {
+        const v = this.viewFor(cardId);
+        if (!v) return;
+        v.node.setScale(1.18, 1.18, 1);
+        tween(v.node).to(0.18, { scale: new Vec3(1, 1, 1) }, { easing: 'backOut' }).start();
+    }
+
+    /** Cards pop onto the board one by one (start of a round's planning). */
+    dealIn() {
+        Sound.play('deal');
+        this.views.forEach((v, i) => {
+            v.node.setScale(0, 0, 1);
+            tween(v.node).delay(0.03 * i).to(0.16, { scale: new Vec3(1, 1, 1) }, { easing: 'backOut' }).start();
+        });
     }
     private drag: { view: CardView; start: Vec2; dragging: boolean; home: Node; homePos: Vec3 } | null = null;
 
@@ -197,7 +215,8 @@ export class BoardView {
             const world = d.view.node.worldPosition.clone();
             d.view.node.setParent(this.dragLayer);
             d.view.node.setWorldPosition(world);
-            d.view.node.setScale(1.06, 1.06, 1);
+            d.view.node.setScale(1.08, 1.08, 1);
+            Sound.play('card_pick');
         }
         const p = this.dragLayer.getComponent(UITransform)!.convertToNodeSpaceAR(new Vec3(loc.x, loc.y, 0));
         d.view.node.setPosition(p);
@@ -210,6 +229,7 @@ export class BoardView {
         const card = d.view.card!;
         if (!d.dragging) {
             // A tap: toggle selection.
+            Sound.play('select');
             this.callbacks.selected(card.id === this.selectedId ? null : card);
             return;
         }
@@ -218,16 +238,20 @@ export class BoardView {
         if (target) {
             try {
                 this.run.moveCard(card.id, target);
-                this.callbacks.changed();
+                Sound.play('card_place');
+                this.callbacks.changed(card.id);
                 return;
             } catch (err) {
                 console.warn(err);
             }
         }
-        // Nowhere useful: put it back.
-        d.view.node.setParent(d.home);
-        d.view.node.setPosition(d.homePos);
-        d.view.node.setScale(1, 1, 1);
+        // Nowhere useful: slide it back home.
+        Sound.play('card_return');
+        const node = d.view.node;
+        const world = node.worldPosition.clone();
+        node.setParent(d.home);
+        node.setWorldPosition(world);
+        tween(node).to(0.14, { position: d.homePos, scale: new Vec3(1, 1, 1) }, { easing: 'quadOut' }).start();
     }
 
     private dropTarget(loc: Vec2): { row: number; col: number } | 'stash' | null {

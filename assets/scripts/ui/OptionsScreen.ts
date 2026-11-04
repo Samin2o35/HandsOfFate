@@ -1,12 +1,13 @@
 // Hands of Fate — ui/OptionsScreen.ts
 // Speed (Slow / Medium / Fast), replay the tutorial, reset all progress, credits.
 // Opened from the title and from planning; Back returns to where you came from.
-// (Sound and music settings arrive with the audio in stage 10.)
+// Sound: Music On/Off and Sound effects On/Off, saved in settings.
 
 import { _decorator, Node, UITransform, Widget } from 'cc';
 import { GameScreen } from './GameScreen';
 import { Game, SPEEDS, SPEED_NAME } from '../app/Game';
 import { ScreenManager } from '../app/ScreenManager';
+import { Sound } from '../app/Sound';
 import { UiKit, makeNode, makeSprite, makeLabel, makeButton, clearChildren, FONT, COLOR } from './UiKit';
 import { ButtonStyle } from './UiButton';
 import { confirmBox } from './Modal';
@@ -56,8 +57,25 @@ export class OptionsScreen extends GameScreen {
         y -= 70;
         makeLabel(root, 'SpeedNote', 'Speed never changes your score: par time counts game-seconds.', { font: 'body', size: 26, color: COLOR.dim, align: 'left', x: -innerW / 2, y });
 
-        // Tutorial
+        // Sound: two toggles side by side (cream = on).
         y -= 110;
+        makeLabel(root, 'SoundTitle', 'SOUND', { size: FONT.label, spacing: 2, color: COLOR.lilac, align: 'left', x: -innerW / 2, y });
+        y -= 70;
+        const hw = (innerW - gap) / 2;
+        const toggle = (key: 'music' | 'sfx', name: string, i: number) => {
+            const on = Game.settings[key];
+            makeButton(root, `Toggle ${key}`, on ? ButtonStyle.Cream : ButtonStyle.Dark, `${name}: ${on ? 'On' : 'Off'}`, hw, 100, { x: -innerW / 2 + hw / 2 + i * (hw + gap), y }, () => {
+                Game.settings[key] = !Game.settings[key];
+                Game.saveSettings();
+                Sound.settingsChanged();
+                this.build();
+            });
+        };
+        toggle('music', 'Music', 0);
+        toggle('sfx', 'Effects', 1);
+
+        // Tutorial
+        y -= 150;
         makeLabel(root, 'TutTitle', 'TUTORIAL', { size: FONT.label, spacing: 2, color: COLOR.lilac, align: 'left', x: -innerW / 2, y });
         y -= 70;
         makeButton(root, 'Replay', ButtonStyle.Cream, 'Replay the tutorial', innerW, 100, { y }, () => this.replayTutorial());

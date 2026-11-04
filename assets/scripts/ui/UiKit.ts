@@ -11,6 +11,7 @@ import {
     _decorator, Component, Node, Sprite, SpriteFrame, Label, TTFFont, UITransform, Color,
     Button, resources, Vec3, HorizontalTextAlignment, VerticalTextAlignment,
 } from 'cc';
+import { Sound } from '../app/Sound';
 import { Card, RANKS, SUITS, Suit, updatedArtPath, classicArtPath, CARD_BACK_PATH } from '../core/cards';
 import { UiButton, ButtonStyle } from './UiButton';
 const { ccclass, property } = _decorator;
@@ -208,7 +209,7 @@ export function makeButton(parent: Node, name: string, style: ButtonStyle, text:
     b.text = text;
     b.style = style;
     n.getComponent(UITransform)!.setContentSize(w, h);
-    n.on(Button.EventType.CLICK, onClick);
+    n.on(Button.EventType.CLICK, () => { Sound.play('click'); onClick(); });
     return b;
 }
 

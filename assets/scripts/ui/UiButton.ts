@@ -13,6 +13,7 @@
 import {
     _decorator, Component, Sprite, SpriteFrame, Button, Label, Color, Enum, Node, EventTouch,
 } from 'cc';
+import { Sound } from '../app/Sound';
 const { ccclass, property, executeInEditMode, requireComponent } = _decorator;
 
 export enum ButtonStyle { Red, Cream, Blue, Dark }
@@ -118,7 +119,7 @@ export class UiButton extends Component {
     }
 
     private onDown(_e: EventTouch) {
-        if (!this.interactable) return;
+        if (!this.interactable) { Sound.play('deny'); return; }
         this.pressed = true;
         this.placeLabel();
     }

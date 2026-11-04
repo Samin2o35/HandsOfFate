@@ -14,6 +14,7 @@
 // can already play run after run here.
 
 import { _decorator, Node, UITransform, Widget, screen } from 'cc';
+import { Sound } from '../app/Sound';
 import { GameScreen } from './GameScreen';
 import { Game } from '../app/Game';
 import { ScreenManager } from '../app/ScreenManager';
@@ -30,6 +31,9 @@ import { buildHealthGrid, cardWords } from './views';
 import { finishRound, PlanningMessage } from './flow';
 import { worldRect, unionRects } from './BoardView';
 import { tutorialStep, setTutorialStep, finishTutorial, showTutorial, suitLegend } from './Tutorial';
+/** runs:round of the last round whose cards were dealt in (see rebuild). */
+let dealtRound = '';
+
 const { ccclass } = _decorator;
 
 const MARGIN = 30;
@@ -53,6 +57,7 @@ export class PlanningScreen extends GameScreen {
         this.message = p?.message ?? null;
         if (!this.run) { ScreenManager.show('Title'); return; }
         if (this.run.phase === 'reward' && ScreenManager.show('RoundWon', { run: this.run })) return;
+        Sound.music(this.run.isBoss ? 'boss' : 'menu');
         screen.on('window-resize', this.rebuild, this);
         UiKit.ready.then(() => this.scheduleOnce(() => this.rebuild(), 0));
     }
@@ -98,7 +103,8 @@ export class PlanningScreen extends GameScreen {
             if (tutorialStep() === 6) finishTutorial();
             this.selected = made;
             this.message = { title: `Forged the ${cardWords(made)}`, body: 'The two cards became one. Done for this round.' };
-            this.changed();
+            Sound.play('forge');
+            this.changed(made.id);
         });
         const youTop = forgeY + (forgeH + 10) / 2 + 15 + 165;
 
@@ -109,7 +115,7 @@ export class PlanningScreen extends GameScreen {
             left: L, top: boardTop, width: innerW, height: boardH,
             stashLeft: L + 465, stashTop: youTop, stashWidth: innerW - 465, stashHeight: 165,
         }, {
-            changed: () => this.changed(),
+            changed: (id) => this.changed(id),
             selected: (card) => { this.selected = card; this.message = null; this.rebuild(); },
         }, this.selected?.id ?? null);
 
@@ -118,6 +124,10 @@ export class PlanningScreen extends GameScreen {
         this.buildInfoBox(root, run, infoLeft, R, board.colLabelsTop, board.colLabelsHeight);
 
         this.buildYou(root, run, L, youTop);
+
+        // A new round's cards are dealt in once (not on every rebuild or when back from Options).
+        const key = `${Game.profile.runs}:${run.round}`;
+        if (dealtRound !== key) { dealtRound = key; board.dealIn(); }
         this.showTutorialStep();
     }
 
@@ -193,11 +203,12 @@ export class PlanningScreen extends GameScreen {
     // ---- Actions ----------------------------------------------------------------
 
     /** After any change: save, then rebuild. */
-    private changed() {
+    private changed(movedId?: number) {
         Game.saveRun();
         // Tutorial step 2 is done once row 3 is full.
         if (tutorialStep() === 2 && this.run!.board().rows[2]?.full) setTutorialStep(3);
         this.rebuild();
+        if (movedId !== undefined) this.board?.pop(movedId);
     }
 
     private openOptions() {
@@ -254,7 +265,8 @@ export class PlanningScreen extends GameScreen {
         const col = [0, 1, 2].find((c) => g.slots[2 * g.cols + c] === null);
         const card = run.stash.find((c) => c.rank === 10 && c.suit === 'C') ?? run.stash[0];
         if (col !== undefined && card) run.moveCard(card.id, { row: 2, col });
-        this.changed();
+        Sound.play('card_place');
+        this.changed(card?.id);
     }
 
 

@@ -32,6 +32,7 @@ import { buildOpponentStrip } from './OpponentStrip';
 import { buildHealthGrid, paintHealth, shortName, HealthGridParts, HandLabelParts } from './views';
 import { flashRing, sparks, floatText, shake, blink, FX_COLOR } from './fx';
 import { finishRound } from './flow';
+import { Sound } from '../app/Sound';
 import { worldRect } from './BoardView';
 import { tutorialStep, setTutorialStep, showTutorial } from './Tutorial';
 const { ccclass } = _decorator;
@@ -72,6 +73,7 @@ export class FightScreen extends GameScreen {
         const p = params as { run?: Run } | undefined;
         this.run = p?.run ?? Game.run;
         if (!this.run) { ScreenManager.show('Title'); return; }
+        Sound.music(this.run.isBoss ? 'boss' : 'fight');
         UiKit.ready.then(() => this.scheduleOnce(() => this.begin(), 0));
     }
 
@@ -244,6 +246,7 @@ export class FightScreen extends GameScreen {
             paintHealth(parts, target);
             this.cellEffects(parts, e, diff);
         }
+        playEventSound(e, diff);
 
         if (e.kind === 'hand' && e.side === 'player') {
             const glow = this.glowFor.get(e.sourceId);
@@ -302,7 +305,8 @@ export class FightScreen extends GameScreen {
         centre.multiplyScalar(1 / touched.length);
         if (d.destroyed.length) {
             floatText(fx, centre, `-${d.destroyed.length}`, FX_COLOR.hit);
-            shake(parts.node, 5);
+            // Bigger hits shake harder (a straight flush cross is a lot of cells).
+            shake(parts.node, Math.min(14, 4 + d.destroyed.length));
         } else if (d.healed.length) floatText(fx, centre, `+${d.healed.length}`, FX_COLOR.heal);
         else if (d.shielded.length) floatText(fx, centre, `+${d.shielded.length}`, '#8FB8E0');
         else if (d.popped.length) floatText(fx, centre, 'blocked', '#8FB8E0');
@@ -383,6 +387,8 @@ export class FightScreen extends GameScreen {
         if (tutorialStep() === 4) setTutorialStep(5);
         const f = this.fight!;
         const won = f.winner === 'player';
+        Sound.play(won ? 'win' : 'lose');
+        if (!won) Sound.music(null);
         const kit = UiKit.get();
         const ut = this.node.getComponent(UITransform)!;
         const banner = makeSprite(this.node, 'EndBanner', kit.panelCream, Math.min(ut.width, 1080) - 120, 180, {}, true).node;
@@ -394,6 +400,15 @@ export class FightScreen extends GameScreen {
 }
 
 // ---- Helpers ---------------------------------------------------------------------------
+
+/** One sound per event, by what it actually did (a heal with nothing to heal is silent). */
+function playEventSound(e: FightEvent, d: Diff) {
+    if (e.kind === 'twist') Sound.play('twist');
+    if (d.destroyed.length) Sound.play(e.effect === 'rot' ? 'rot' : e.target === 'enemy' ? 'hit' : 'hurt');
+    else if (d.popped.length) Sound.play('block');
+    else if (d.healed.length) Sound.play('heal');
+    else if (d.shielded.length) Sound.play('shield');
+}
 
 function livingOf(g: HealthGrid): number {
     return g.cells.reduce((n, c) => n + (c.state === 'alive' ? 1 : 0), 0);

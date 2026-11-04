@@ -6,6 +6,7 @@
 // Next round goes to the boss intro on boss rounds, otherwise to planning.
 
 import { _decorator, Node, UITransform, UIOpacity, Widget, tween, Vec3 } from 'cc';
+import { Sound } from '../app/Sound';
 import { GameScreen } from './GameScreen';
 import { Game } from '../app/Game';
 import { ScreenManager } from '../app/ScreenManager';
@@ -38,6 +39,7 @@ export class RoundWonScreen extends GameScreen {
         this.run = p?.run ?? Game.run;
         this.result = p?.result ?? this.run?.data.lastResult ?? null;
         if (!this.run || !this.result || this.run.phase !== 'reward') { ScreenManager.show('Title'); return; }
+        Sound.music('menu');
         UiKit.ready.then(() => this.scheduleOnce(() => {
             this.build();
             celebrateAces(this.node, Game.takePendingAces(), () => this.tutorialStep5());
@@ -115,12 +117,12 @@ export class RoundWonScreen extends GameScreen {
             this.counted = true;
             nodes.forEach((n, i) => {
                 n.setScale(0, 1, 1);
-                tween(n).delay(0.08 * i).to(0.15, { scale: new Vec3(1, 1, 1) }).start();
+                tween(n).delay(0.08 * i).call(() => Sound.play('tick')).to(0.15, { scale: new Vec3(1, 1, 1) }).start();
             });
             const counter = { v: 0 };
             tween(counter).delay(0.08 * nodes.length).to(0.7, { v: s.total }, {
                 onUpdate: () => { if (total.isValid) total.string = Math.round(counter.v).toLocaleString('en-US'); },
-            }).start();
+            }).call(() => Sound.play('total')).start();
         }
         return top - h - 10;
     }
@@ -151,6 +153,7 @@ export class RoundWonScreen extends GameScreen {
     }
 
     private pickCard(card: Card) {
+        Sound.play('select');
         this.takeId = card.id;
         this.build();
     }
@@ -211,6 +214,7 @@ export class RoundWonScreen extends GameScreen {
     }
 
     private choose(c: RewardChoice) {
+        Sound.play('select');
         this.choice = c;
         this.build();
     }

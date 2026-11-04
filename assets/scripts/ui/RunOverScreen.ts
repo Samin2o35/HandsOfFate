@@ -4,6 +4,7 @@
 // and its save removed as soon as this screen opens.
 
 import { _decorator, Node, UITransform, Widget, Color, tween, Vec3 } from 'cc';
+import { Sound } from '../app/Sound';
 import { GameScreen } from './GameScreen';
 import { Game } from '../app/Game';
 import { ScreenManager } from '../app/ScreenManager';
@@ -31,6 +32,7 @@ export class RunOverScreen extends GameScreen {
         this.run = p?.run ?? Game.run;
         this.result = p?.result ?? this.run?.data.lastResult ?? null;
         if (!this.run) { ScreenManager.show('Title'); return; }
+        Sound.music(null);
         Game.endRun();
         this.earned = Game.takePendingAces();
         UiKit.ready.then(() => this.scheduleOnce(() => {

@@ -11,6 +11,7 @@
 // The step is saved in settings, so closing the game mid-tutorial resumes it.
 
 import { Node, UITransform, Color, Rect, Vec3, Mask, Graphics, RichText, BlockInputEvents } from 'cc';
+import { Sound } from '../app/Sound';
 import { Game } from '../app/Game';
 import { UiKit, makeNode, makeSprite, makeLabel, makeButton, FONT, COLOR } from './UiKit';
 import { ButtonStyle } from './UiButton';
@@ -77,6 +78,7 @@ export function showTutorial(host: Node, v: TutorialView): Node {
     const W = hostUt.width, H = hostUt.height;
     const cw = Math.min(W, 1080);
     const overlay = makeNode(host, 'Tutorial', W, H);
+    Sound.play('dealer');
     const dimColor = new Color(10, 8, 16, 165);
 
     // Dim everything except an ellipse around the spot (an inverted ellipse mask).

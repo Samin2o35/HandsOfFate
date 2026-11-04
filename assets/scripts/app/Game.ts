@@ -1,7 +1,7 @@
 // Hands of Fate — app/Game.ts
 // The one place that holds the game's lasting state and saves it on the device:
 //   profile  (best score, best round, Ace progress)   -> "hof.profile"
-//   settings (speed, later sound and tutorial flags)  -> "hof.settings"
+//   settings (speed, sound, music, tutorial)           -> "hof.settings"
 //   run      (the run in progress, if any)            -> "hof.run"
 // Screens read and change state through `Game`, never through localStorage directly.
 
@@ -21,6 +21,9 @@ export interface Settings {
     tutorialDone: boolean;
     /** Tutorial step 1..6 while it runs (0 = not started). */
     tutorialStep: number;
+    /** Music on/off and sound effects on/off (Options). */
+    music: boolean;
+    sfx: boolean;
 }
 
 /** The tutorial run always uses this seed: its round 1 (Jack of Spades' table) is a fair first fight. */
@@ -51,7 +54,7 @@ function write(key: string, value: string | null) {
 
 class GameState {
     profile: Profile = newProfile();
-    settings: Settings = { speed: 'medium', tutorialDone: false, tutorialStep: 0 };
+    settings: Settings = { speed: 'medium', tutorialDone: false, tutorialStep: 0, music: true, sfx: true };
     /** Aces earned since a screen last showed them (the celebration pops up once). */
     pendingAces: AceId[] = [];
     run: Run | null = null;
@@ -121,7 +124,7 @@ class GameState {
         return this.newRun();
     }
 
-    /** Wipes best scores, Aces and the saved run; keeps the speed setting. */
+    /** Wipes best scores, Aces and the saved run; keeps the speed and sound settings. */
     resetProgress() {
         this.profile = newProfile();
         this.settings = { ...this.settings, tutorialDone: false, tutorialStep: 0 };

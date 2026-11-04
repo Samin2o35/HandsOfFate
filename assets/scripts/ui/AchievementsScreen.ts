@@ -4,6 +4,7 @@
 // never tinted), its name with the suit icon, the goal, a progress bar and the best.
 
 import { _decorator, Node, UITransform, Widget, Color } from 'cc';
+import { Sound } from '../app/Sound';
 import { GameScreen } from './GameScreen';
 import { Game } from '../app/Game';
 import { ScreenManager } from '../app/ScreenManager';
@@ -18,6 +19,7 @@ export class AchievementsScreen extends GameScreen {
 
     onShow() {
         Game.load();
+        Sound.music('menu');
         UiKit.ready.then(() => this.scheduleOnce(() => this.build(), 0));
     }
 

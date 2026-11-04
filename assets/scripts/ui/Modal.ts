@@ -5,6 +5,7 @@
 // Both dim the screen and block touches underneath until closed.
 
 import { Node, UITransform, Color, BlockInputEvents, tween, Vec3 } from 'cc';
+import { Sound } from '../app/Sound';
 import { ACES, AceId } from '../core/achievements';
 import { UiKit, makeNode, makeSprite, makeLabel, makeButton, FONT, COLOR } from './UiKit';
 import { ButtonStyle } from './UiButton';
@@ -43,6 +44,7 @@ export function celebrateAce(host: Node, id: AceId, onClose?: () => void): Node 
     const kit = UiKit.get();
     const ace = ACES.find((a) => a.id === id)!;
     const layer = dimLayer(host, 'AceEarned', 215);
+    Sound.play('ace');
 
     makeLabel(layer, 'Banner', 'ACE EARNED', { size: FONT.title, spacing: 5, color: COLOR.gold, y: 560 });
     // The card at 2× with a gold ring and a pulsing glow behind it.

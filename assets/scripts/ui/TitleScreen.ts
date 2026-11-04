@@ -12,6 +12,7 @@
 //   Quit         only shown on Android builds (iOS and web apps don't quit)
 
 import { _decorator, Label, game, sys, Button } from 'cc';
+import { Sound } from '../app/Sound';
 import { GameScreen } from './GameScreen';
 import { UiButton } from './UiButton';
 import { Game, SPEED_NAME } from '../app/Game';
@@ -33,6 +34,7 @@ export class TitleScreen extends GameScreen {
 
     onShow() {
         Game.load();
+        Sound.music('menu');
         this.wire(this.newRunButton, this.onNewRun);
         this.wire(this.continueButton, this.onContinue);
         this.wire(this.howToPlayButton, this.onHowToPlay);
@@ -96,6 +98,6 @@ export class TitleScreen extends GameScreen {
     private wire(b: UiButton | null, fn: () => void) {
         const button = b?.getComponent(Button);
         if (!button || button.clickEvents.length > 0) return;
-        b!.node.on(Button.EventType.CLICK, fn, this);
+        b!.node.on(Button.EventType.CLICK, () => { Sound.play('click'); fn.call(this); }, this);
     }
 }
