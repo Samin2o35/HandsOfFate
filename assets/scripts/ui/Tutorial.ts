@@ -65,8 +65,8 @@ export interface TutorialView {
     onButton: () => void;
     /** Called after Skip tutorial. */
     onSkip?: () => void;
-    /** Where the Dealer sits. */
-    at: 'bottom' | 'top';
+    /** Where the Dealer sits: top or bottom centre, or over the left or right of the table. */
+    at: 'bottom' | 'top' | 'left' | 'right';
     /** Extra content under the text (step 3's suit legend): draws at top y, returns the y below it. */
     extra?: (parent: Node, width: number, left: number, top: number) => number;
 }
@@ -80,6 +80,8 @@ export function showTutorial(host: Node, v: TutorialView): Node {
     const hostUt = host.getComponent(UITransform)!;
     const W = hostUt.width, H = hostUt.height;
     const cw = Math.min(W, 1080);
+    const tableW = Math.min(W, 1920);
+    const onSide = v.at === 'left' || v.at === 'right';
     const overlay = makeNode(host, 'Tutorial', W, H);
     // The panel is rebuilt whenever its screen rebuilds; the sound is for a new step only.
     if (v.step !== lastSoundStep) { lastSoundStep = v.step; Sound.play('dealer'); }
@@ -113,8 +115,8 @@ export function showTutorial(host: Node, v: TutorialView): Node {
         dim.color = new Color(10, 8, 16, 110);
     }
 
-    // Skip tutorial, top right.
-    makeButton(overlay, 'Skip', ButtonStyle.Dark, 'Skip tutorial', 240, 70, { x: cw / 2 - 30 - 120, y: H / 2 - 165 }, () => {
+    // Skip tutorial: top right, or just above the Dealer when he sits at the side (placed below).
+    const skip = makeButton(overlay, 'Skip', ButtonStyle.Dark, 'Skip tutorial', 240, 70, { x: cw / 2 - 30 - 120, y: H / 2 - 165 }, () => {
         finishTutorial();
         if (overlay.isValid) overlay.destroy();
         v.onSkip?.();
@@ -122,7 +124,7 @@ export function showTutorial(host: Node, v: TutorialView): Node {
 
     // The Dealer: animated Joker, then the line, the button and "n / 6".
     // The panel sizes itself to its text (measured first), plus any extra content.
-    const panelW = cw - 60;
+    const panelW = onSide ? 720 : cw - 60;
     const textW = panelW - 220;
     const textLeft = -panelW / 2 + 190;
     const panel = makeNode(overlay, 'Dealer', panelW, 300);
@@ -165,7 +167,12 @@ export function showTutorial(host: Node, v: TutorialView): Node {
     anim.strip = 'anim/joker_true';
     makeLabel(panel, 'Name', 'The Dealer', { font: 'body', size: 24, color: COLOR.lilac, x: -panelW / 2 + 90, y: panelH / 2 - pad - 186 });
 
-    panel.setPosition(0, v.at === 'bottom' ? -H / 2 + 40 + panelH / 2 : H / 2 - 150 - panelH / 2);
+    if (onSide) {
+        const px = (v.at === 'right' ? 1 : -1) * (tableW / 2 - 40 - panelW / 2);
+        panel.setPosition(px, 0);
+        skip.node.setPosition(px + panelW / 2 - 120, panelH / 2 + 20 + 35);
+    }
+    else panel.setPosition(0, v.at === 'bottom' ? -H / 2 + 40 + panelH / 2 : H / 2 - 150 - panelH / 2);
     return overlay;
 }
 

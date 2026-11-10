@@ -11,6 +11,14 @@ col = {'sprite': '#5a4a6a', 'button': '#c0392b', 'node': '#33404a', 'label': '#e
 def tr(b): return (b['x'] + W/2)*s, (H/2 - b['y'] - b['h'])*s, (b['x'] + b['w'] + W/2)*s, (H/2 - b['y'])*s
 for b in d['boxes']:
     if b['kind'] == 'label': continue
+    if b.get('fill') and b['w'] > 0 and b['h'] > 0:
+        x0, y0, x1, y1 = tr(b)
+        g.rectangle([x0, y0, x1, y1], fill=b['fill'])
+        continue
+    if b['kind'] == 'sprite' and (b.get('frame') or '').startswith('cards/'):
+        x0, y0, x1, y1 = tr(b)
+        g.rectangle([x0, y0, x1, y1], fill='#cfc6a8', outline='#8a7f63')
+        continue
     x0, y0, x1, y1 = tr(b)
     if b['w'] <= 0 or b['h'] <= 0: continue
     if b['depth'] <= 1: continue

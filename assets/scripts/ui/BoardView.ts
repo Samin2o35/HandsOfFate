@@ -1,5 +1,6 @@
 // Hands of Fate — ui/BoardView.ts
-// Your card grid with its hand labels, plus the stash, plus drag and drop.
+// Your card grid with a hand badge at the end of every row and under every
+// column (same size both ways), plus the stash, plus drag and drop.
 //  - Tap a card to select it (pink ring); tap again to clear.
 //  - Drag a card onto any slot: empty slot = move, card = swap.
 //  - Drag a grid card onto the stash to take it off the board.
@@ -10,10 +11,10 @@ import { Sound } from '../app/Sound';
 import { Run } from '../core/run';
 import { Card } from '../core/cards';
 import { BoardResult } from '../core/evaluate';
-import { makeNode, makeLabel, FONT, COLOR } from './UiKit';
-import {
-    CardView, buildSlot, buildRowLabel, buildColumnLabel, cardScaleFor, CARD_W, CARD_H, HandLabelParts,
-} from './views';
+import { makeNode, makeLabel, FONT } from './UiKit';
+import { box } from './table';
+import { CardView, buildSlot, cardScaleFor, CARD_W, CARD_H } from './views';
+import { buildBadge, BadgeParts, BADGE, GREY } from './table';
 
 const DRAG_START = 12; // px of movement before a touch becomes a drag
 
@@ -22,6 +23,8 @@ export interface BoardCallbacks {
     changed: (movedId?: number) => void;
     /** Selection changed (null = none). */
     selected: (card: Card | null) => void;
+    /** A row or column badge was tapped (its hand id, or null for a line with no hand). */
+    badge?: (handId: string | null) => void;
 }
 
 export interface BoardLayout {
@@ -37,20 +40,18 @@ export interface BoardLayout {
     stashHeight: number;
 }
 
-/** Labels built for each row and column (the fight screen updates their bars). */
-export interface BoardLabels {
-    rows: HandLabelParts[];
-    cols: HandLabelParts[];
+/** Badges built for each row and column (the fight screen fills their rings). */
+export interface BoardBadges {
+    rows: BadgeParts[];
+    cols: BadgeParts[];
 }
 
 export class BoardView {
     readonly root: Node;
     readonly stash: Node;
-    /** Right edge and top of the column labels, for placing the info box beside them. */
-    colLabelsRight = 0;
-    colLabelsTop = 0;
-    colLabelsHeight = 0;
-    labels: BoardLabels = { rows: [], cols: [] };
+    badges: BoardBadges = { rows: [], cols: [] };
+    /** The grid block (cards + badges) in the screen root's space: left, top, width, height. */
+    block = { left: 0, top: 0, width: 0, height: 0 };
 
     private slots: { node: Node; row: number; col: number }[] = [];
     private views: CardView[] = [];
@@ -61,19 +62,19 @@ export class BoardView {
         return s ? worldRect(s.node) : null;
     }
 
-    /** World rectangle of a whole row: its slots and its label. */
+    /** World rectangle of a whole row: its slots and its badge. */
     rowRect(row: number): Rect | null {
         const parts = this.slots.filter((x) => x.row === row).map((x) => worldRect(x.node));
-        const label = this.labels.rows[row];
-        if (label) parts.push(worldRect(label.node));
+        const badge = this.badges.rows[row];
+        if (badge) parts.push(worldRect(badge.node));
         return unionRects(parts);
     }
 
-    /** World rectangle of a whole column: its slots and its label. */
+    /** World rectangle of a whole column: its slots and its badge. */
     colRect(col: number): Rect | null {
         const parts = this.slots.filter((x) => x.col === col).map((x) => worldRect(x.node));
-        const label = this.labels.cols[col];
-        if (label) parts.push(worldRect(label.node));
+        const badge = this.badges.cols[col];
+        if (badge) parts.push(worldRect(badge.node));
         return unionRects(parts);
     }
 
@@ -89,6 +90,13 @@ export class BoardView {
     setSelected(cardId: number | null) {
         this.selectedId = cardId;
         for (const v of this.views) if (v.isValid) v.setSelected(v.card?.id === cardId);
+    }
+
+    /** Pink rings on a set of cards (a tapped hand's cards); clears the single selection. */
+    highlight(cardIds: readonly number[]) {
+        this.selectedId = null;
+        const set = new Set(cardIds);
+        for (const v of this.views) if (v.isValid) v.setSelected(!!v.card && set.has(v.card.id));
     }
 
     /** A little bounce on one card (just dropped or just forged). */
@@ -135,19 +143,21 @@ export class BoardView {
         const pitchX = cw + gap, pitchY = ch + gap;
         const gridW = g.cols * pitchX - gap;
         const gridH = g.rows * pitchY - gap;
-        const colLabelH = 105;
+        const badgeGap = 16;
 
-        // Centre the whole block (grid + column labels) vertically in the area.
-        const blockH = gridH + 15 + colLabelH;
+        // Centre the block (grid + badges) in the area.
+        const blockW = gridW + badgeGap + BADGE, blockH = gridH + badgeGap + BADGE;
+        const left = Math.max(0, (this.layout.width - blockW) / 2);
         const top = -Math.max(0, (this.layout.height - blockH) / 2);
+        this.block = { left: this.layout.left + left, top: this.layout.top + top, width: blockW, height: blockH };
 
         const scoring = new Set<number>();
         for (const h of result.hands) if (h.source !== 'leftover') for (const pc of h.cards) scoring.add(pc.card.id);
 
         for (let r = 0; r < g.rows; r++) {
             for (let c = 0; c < g.cols; c++) {
-                const x = 10 + c * pitchX + cw / 2;
-                const y = top - (r * pitchY + ch / 2) - 10;
+                const x = left + c * pitchX + cw / 2;
+                const y = top - (r * pitchY + ch / 2);
                 const slot = buildSlot(this.root, `Slot ${r},${c}`, cw, ch, x, y);
                 this.slots.push({ node: slot, row: r, col: c });
                 const card = g.slots[r * g.cols + c];
@@ -160,38 +170,37 @@ export class BoardView {
             }
         }
 
-        // Row labels on the right.
-        const labelLeft = 10 + gridW + 30;
-        const labelW = Math.min(390, this.layout.width - labelLeft);
-        const labelH = Math.min(120, pitchY - 24);
-        this.labels.rows = result.rows.map((line, r) =>
-            buildRowLabel(this.root, line.hand, line.full, labelW, labelH, labelLeft + labelW / 2, top - (r * pitchY + ch / 2) - 10));
-
-        // Column labels below.
-        const colW = Math.min(cw + gap - 6, 140);
-        const colTop = top - gridH - 10 - 15;
-        this.labels.cols = result.cols.map((line, c) =>
-            buildColumnLabel(this.root, line.hand, line.full, colW, colLabelH - 6, 10 + c * pitchX + cw / 2, colTop - colLabelH / 2));
-        this.colLabelsRight = this.layout.left + 10 + gridW;
-        this.colLabelsTop = this.layout.top + colTop;
-        this.colLabelsHeight = colLabelH;
+        // The same badge at the end of each row and under each column.
+        const rowX = left + gridW + badgeGap + BADGE / 2;
+        this.badges.rows = result.rows.map((line, r) =>
+            buildBadge(this.root, `RowBadge ${r}`, line.hand, line.full, rowX, top - (r * pitchY + ch / 2)));
+        const colY = top - gridH - badgeGap - BADGE / 2;
+        this.badges.cols = result.cols.map((line, c) =>
+            buildBadge(this.root, `ColBadge ${c}`, line.hand, line.full, left + c * pitchX + cw / 2, colY));
+        const tap = this.callbacks.badge;
+        if (tap && this.interactive) {
+            for (const b of [...this.badges.rows, ...this.badges.cols]) b.node.on(Node.EventType.TOUCH_END, () => tap(b.hand?.id ?? null));
+        }
 
         if (this.layout.stashWidth > 0) this.buildStash();
     }
 
     private buildStash() {
-        makeLabel(this.stash, 'Title', 'STASH', { size: FONT.label, spacing: 2, color: COLOR.lilac, align: 'left', x: 0, y: -12 });
+        makeLabel(this.stash, 'Title', 'STASH', { size: FONT.labelSmall, spacing: 2, color: GREY.soft, align: 'left', x: 0, y: -12 });
         const cards = this.run.stash;
         const w = CARD_W, h = CARD_H;
+        // The drop area: a flat strip behind the cards.
+        const sw = this.layout.stashWidth, sh = this.layout.stashHeight - 26;
+        box(this.stash, 'Back', sw, sh, { x: sw / 2, y: -26 - sh / 2 }, GREY.slot);
         const room = this.layout.stashWidth - w;
         const step = cards.length > 1 ? Math.min(w + 12, room / (cards.length - 1)) : 0;
         cards.forEach((card, i) => {
-            const v = CardView.create(this.stash, card, w, h, w / 2 + i * step, -36 - h / 2);
+            const v = CardView.create(this.stash, card, w, h, w / 2 + i * step, -32 - h / 2);
             v.setSelected(card.id === this.selectedId);
             this.hook(v);
         });
         if (cards.length === 0) {
-            makeLabel(this.stash, 'Empty', 'Drop cards here', { font: 'body', size: FONT.bodySmall, color: COLOR.dim, align: 'left', x: 0, y: -36 - h / 2 });
+            makeLabel(this.stash, 'Empty', 'Drop cards here', { font: 'body', size: FONT.bodySmall, color: GREY.dim, align: 'left', x: 16, y: -32 - h / 2 });
         }
     }
 

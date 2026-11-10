@@ -1,7 +1,8 @@
 // Hands of Fate — ui/RoundWonScreen.ts
-// Mockup 07. The round's score, line by line, counting up; then
-//   1 · ALWAYS: TAKE ONE OF THEIR CARDS   (tap one; gold ring)
-//   2 · THEN CHOOSE ONE                   (Health / Grid / Cards)
+// Landscape, two steps (plan phase 2, grey boxes):
+//   left   the round's bar tab: score lines one by one, then the total counting up
+//   right  1 Take one of their cards  (large heading; their cards on the table)
+//          2 Then choose a reward     (greyed until a card is taken)
 // Next round unlocks once both are picked. Grid asks row or column when both can grow.
 // Next round goes to the boss intro on boss rounds, otherwise to planning.
 
@@ -16,13 +17,12 @@ import { formatTime } from '../core/scoring';
 import { UiKit, makeNode, makeSprite, makeLabel, makeButton, clearChildren, FONT, COLOR } from './UiKit';
 import { ButtonStyle, UiButton } from './UiButton';
 import { CardView, CARD_W, CARD_H, cardWords } from './views';
-import { buildTopBar, dashedLine, statRow } from './parts';
+import { tableRegions, buildStrip, box, GREY } from './table';
 import { PlanningMessage } from './flow';
 import { tutorialStep, setTutorialStep, showTutorial } from './Tutorial';
 import { celebrateAces } from './Modal';
 const { ccclass } = _decorator;
 
-const MARGIN = 30;
 
 @ccclass('RoundWonScreen')
 export class RoundWonScreen extends GameScreen {
@@ -50,7 +50,7 @@ export class RoundWonScreen extends GameScreen {
     private tutorialStep5() {
         if (tutorialStep() !== 5) return;
         const overlay = showTutorial(this.node, {
-            step: 5, at: 'top', button: 'Got it', spot: null,
+            step: 5, at: 'left', button: 'Got it', spot: null,
             onButton: () => { setTutorialStep(6); if (overlay.isValid) overlay.destroy(); },
         });
     }
@@ -59,56 +59,58 @@ export class RoundWonScreen extends GameScreen {
         const run = this.run!, r = this.result!;
         if (!this.node.isValid) return;
         this.node.getComponent(Widget)?.updateAlignment();
-        const ut = this.node.getComponent(UITransform)!;
-        const W = Math.min(ut.width, 1080), H = ut.height;
-        if (!this.content) this.content = makeNode(this.node, 'Content', W, H);
+        const g = tableRegions(this.node.getComponent(UITransform)!);
+        if (!this.content) this.content = makeNode(this.node, 'Content', g.W, g.H);
         clearChildren(this.content);
         const root = this.content;
-        const L = -W / 2 + MARGIN, R = W / 2 - MARGIN, T = H / 2, B = -H / 2;
-        const innerW = R - L;
 
-        buildTopBar(root, run.score, `ROUND ${r.round} CLEARED`, 'Score, then rewards', L, R, T, () => this.toTitle());
-        const scoreBottom = this.buildScore(root, r, L, R, T - 165);
-        const takeBottom = this.buildTake(root, run, L, innerW, scoreBottom - 40);
-        makeLabel(root, 'ChooseTitle', '2 · THEN CHOOSE ONE', { size: FONT.labelSmall, spacing: 2, color: COLOR.lilac, align: 'left', x: L, y: takeBottom - 45 });
-        this.buildRewards(root, run, L, innerW, takeBottom - 75);
+        buildStrip(root, g, r.round, 'Cleared · take a card, then a reward', run.score, () => this.toTitle());
+        const top = g.side.top, bottom = g.side.top - g.side.height;
+        const tabW = 560;
+        this.buildScore(root, r, g.L, top, tabW, top - bottom);
 
-        this.next = makeButton(root, 'Next', ButtonStyle.Red, 'Next round', innerW, 100, { x: 0, y: B + 40 + 50 }, () => this.goNext());
+        // Right: the two steps, then Next round at the bottom right.
+        const left = g.L + tabW + 60, w = g.R - left;
+        const took = this.takeId !== null;
+        const takeBottom = this.buildTake(root, run, left, w, top);
+        const stepTop = takeBottom - 40;
+        makeLabel(root, 'Step2', '2  Then choose a reward', { size: FONT.heading + 9, color: took ? GREY.text : GREY.dim, align: 'left', x: left, y: stepTop - 24 });
+        this.buildRewards(root, run, left, w, stepTop - 70, took);
+        const nextW = 420, nextH = 100;
+        this.next = makeButton(root, 'Next', ButtonStyle.Red, 'Next round', nextW, nextH, { x: g.R - nextW / 2, y: bottom + nextH / 2 }, () => this.goNext());
         this.refreshNext();
     }
 
-    // ---- 1. Score -------------------------------------------------------------------
+    // ---- The bar tab ------------------------------------------------------------------
 
-    private buildScore(root: Node, r: RoundResult, L: number, R: number, top: number): number {
-        const kit = UiKit.get();
+    private buildScore(root: Node, r: RoundResult, left: number, top: number, w: number, h: number) {
         const s = r.score;
-        const w = R - L + 10, h = 470;
-        const panel = makeSprite(root, 'ScorePanel', kit.panelCream, w, h + 10, { x: 0, y: top - (h + 10) / 2 }, true).node;
-        const x0 = -w / 2 + 40, x1 = w / 2 - 40;
-        const lineTop = h / 2 - 40;
-        const rows: [string, string, string, string?][] = [
+        const tab = box(root, 'Tab', w, h, { x: left + w / 2, y: top - h / 2 }, GREY.panel).node;
+        const x0 = -w / 2 + 32, x1 = w / 2 - 32;
+        makeLabel(tab, 'Title', `ROUND ${r.round}`, { size: FONT.heading, spacing: 2, color: GREY.text, align: 'left', x: x0, y: h / 2 - 44 });
+        const lineTop = h / 2 - 110;
+        const rows: [string, string, string][] = [
             ['Hands fired', `${s.handsFired} hands`, `+${s.handBonus}`],
             ['Health left', `${s.cellsLeft} / ${s.cellsTotal}`, `+${s.healthBonus}`],
             ['Flawless', s.flawless ? 'no cells lost' : 'lost cells', `+${s.flawlessBonus}`],
             ['Time', `${formatTime(s.time)} · par ${formatTime(s.par)}`, `+${s.timeBonus}`],
         ];
         const nodes: Node[] = [];
-        rows.forEach(([name, detail, value], i) => {
-            const row = makeNode(panel, `Row${i}`, 0, 0, { y: lineTop - i * 55 });
-            statRow(row, name, detail, value, x0, x1, 0);
-            dashedLine(row, x0, x1, -28);
+        const line = (name: string, detail: string, value: string, y: number, valueColor: string = GREY.text) => {
+            const row = makeNode(tab, name, 0, 0, { y });
+            makeLabel(row, 'Name', name, { size: FONT.label, color: GREY.text, align: 'left', x: x0, y: 12 });
+            if (detail) makeLabel(row, 'Detail', detail, { font: 'body', size: 24, color: GREY.soft, align: 'left', x: x0, y: -16 });
+            makeLabel(row, 'Value', value, { size: FONT.heading - 3, color: valueColor, align: 'right', x: x1, y: 0 });
             nodes.push(row);
-        });
-        const subY = lineTop - 4 * 55;
-        const sub = makeNode(panel, 'Subtotal', 0, 0, { y: subY });
-        statRow(sub, 'Subtotal', '', s.subtotal.toLocaleString('en-US'), x0, x1, 0);
-        const mult = makeNode(panel, 'Multiplier', 0, 0, { y: subY - 44 });
-        statRow(mult, `Round ${r.round} multiplier`, '', `× ${s.multiplier.toFixed(1)}`, x0, x1, 0, '#D2453C');
-        nodes.push(sub, mult);
+        };
+        rows.forEach(([name, detail, value], i) => line(name, detail, value, lineTop - i * 76));
+        const subY = lineTop - 4 * 76;
+        line('Subtotal', '', s.subtotal.toLocaleString('en-US'), subY);
+        line(`Round ${r.round} multiplier`, '', `× ${s.multiplier.toFixed(1)}`, subY - 56, '#D2453C');
 
-        const totalBox = makeSprite(panel, 'TotalBox', kit.panelDark, x1 - x0 + 10, 100, { y: -h / 2 + 30 + 50 + 6 }, true).node;
-        makeLabel(totalBox, 'Title', 'ROUND TOTAL', { size: FONT.label + 3, spacing: 2, color: COLOR.cream, align: 'left', x: -(x1 - x0) / 2 + 20, y: 3 });
-        const total = makeLabel(totalBox, 'Total', '0', { size: FONT.title - 6, color: COLOR.gold, align: 'right', x: (x1 - x0) / 2 - 20, y: 3 });
+        const totalBox = box(tab, 'TotalBox', w - 40, 100, { y: -h / 2 + 20 + 50 }, GREY.raised).node;
+        makeLabel(totalBox, 'Title', 'ROUND TOTAL', { size: FONT.label + 3, spacing: 2, color: GREY.text, align: 'left', x: -(w - 40) / 2 + 20 });
+        const total = makeLabel(totalBox, 'Total', '0', { size: FONT.title - 6, color: COLOR.gold, align: 'right', x: (w - 40) / 2 - 20 });
 
         // Lines appear one by one, then the total counts up (shown at once on a rebuild).
         if (this.counted) {
@@ -124,32 +126,43 @@ export class RoundWonScreen extends GameScreen {
                 onUpdate: () => { if (total.isValid) total.string = Math.round(counter.v).toLocaleString('en-US'); },
             }).call(() => Sound.play('total')).start();
         }
-        return top - h - 10;
     }
 
-    // ---- 2. Take a card ---------------------------------------------------------------
+    // ---- 1. Take a card ---------------------------------------------------------------
 
-    private buildTake(root: Node, run: Run, L: number, innerW: number, top: number): number {
-        const kit = UiKit.get();
+    /** The largest card size whose rows fit in maxH; returns the scale and cards per row. */
+    private takeLayout(count: number, w: number, maxH: number): { scale: number; perRow: number; rows: number } {
+        for (const scale of [1.5, 1, 0.75]) {
+            const gap = scale >= 1.5 ? 16 : 12;
+            const perRow = Math.max(1, Math.floor((w + gap) / (CARD_W * scale + gap)));
+            const rows = Math.ceil(count / perRow);
+            if (rows * (CARD_H * scale + gap) - gap <= maxH) return { scale, perRow, rows };
+        }
+        const perRow = Math.max(1, Math.floor((w + 12) / (CARD_W * 0.5 + 12)));
+        return { scale: 0.5, perRow, rows: Math.ceil(count / perRow) };
+    }
+
+    private buildTake(root: Node, run: Run, left: number, w: number, top: number): number {
         const cards = run.takeableCards();
-        const scale = cards.length <= 9 ? 1 : 0.75;
-        const cw = CARD_W * scale, ch = CARD_H * scale, gap = 12;
-        const perRow = Math.max(1, Math.floor((innerW - 60 + gap) / (cw + gap)));
-        const rows = Math.ceil(cards.length / perRow);
-        const h = 70 + rows * (ch + gap) + 10;
-        const panel = makeSprite(root, 'TakePanel', kit.panelDark, innerW, h + 6, { x: L + innerW / 2, y: top - (h + 6) / 2 }, true).node;
-        makeLabel(panel, 'Title', '1 · ALWAYS: TAKE ONE OF THEIR CARDS', { size: FONT.labelSmall, spacing: 2, color: COLOR.gold, align: 'left', x: -innerW / 2 + 33, y: h / 2 - 32 });
+        const took = this.takeId !== null;
+        makeLabel(root, 'Step1', '1  Take one of their cards', { size: FONT.heading + 9, color: GREY.text, align: 'left', x: left, y: top - 24 });
+        const picked = cards.find((c) => c.id === this.takeId);
+        makeLabel(root, 'Step1Note', picked ? `Taking the ${cardWords(picked)}: it goes to your stash.` : 'It goes to your stash.',
+            { font: 'body', size: FONT.bodySmall, color: took ? COLOR.gold : GREY.soft, align: 'left', x: left, y: top - 66 });
+        const cardsTop = top - 100;
+        const { scale, perRow } = this.takeLayout(cards.length, w, 300);
+        const cw = CARD_W * scale, ch = CARD_H * scale, gap = scale >= 1.5 ? 16 : 12;
+        let bottom = cardsTop;
         cards.forEach((card, i) => {
             const row = Math.floor(i / perRow), col = i % perRow;
-            const inRow = Math.min(perRow, cards.length - row * perRow);
-            const rowW = inRow * cw + (inRow - 1) * gap;
-            const x = -rowW / 2 + cw / 2 + col * (cw + gap);
-            const y = h / 2 - 70 - ch / 2 - row * (ch + gap);
-            const v = CardView.create(panel, card, cw, ch, x, y);
+            const x = left + cw / 2 + col * (cw + gap);
+            const y = cardsTop - ch / 2 - row * (ch + gap);
+            bottom = Math.min(bottom, y - ch / 2);
+            const v = CardView.create(root, card, cw, ch, x, y);
             v.setInHand(card.id === this.takeId);
             v.node.on(Node.EventType.TOUCH_END, () => this.pickCard(card));
         });
-        return top - h - 6;
+        return bottom;
     }
 
     private pickCard(card: Card) {
@@ -158,56 +171,51 @@ export class RoundWonScreen extends GameScreen {
         this.build();
     }
 
-    // ---- 3. Rewards -------------------------------------------------------------------
+    // ---- 2. Rewards -------------------------------------------------------------------
 
-    private buildRewards(root: Node, run: Run, L: number, innerW: number, top: number) {
+    private buildRewards(root: Node, run: Run, left: number, w: number, top: number, open: boolean) {
         const kit = UiKit.get();
         const options = run.rewardOptions();
-        const gap = 24, h = 330;
-        const w = (innerW - gap * 2) / 3;
+        const gap = 24, h = 250;
+        const cw = Math.min(360, (w - gap * 2) / 3);
         const specs = [
-            { kind: 'health' as const, badge: `+${HEALTH_REWARD}`, title: 'Health', color: '#D2453C', text: `+${HEALTH_REWARD} cells on your health grid`, full: 'Health is full' },
-            { kind: 'grid' as const, badge: '+1', title: 'Grid', color: COLOR.ink, text: '+1 row or column for cards', full: 'Grid is 5×5' },
-            { kind: 'cards' as const, badge: `×${CARDS_REWARD}`, title: 'Cards', color: '#3978A8', text: `${CARDS_REWARD} random cards · one duplicate`, full: '' },
+            { kind: 'health' as const, badge: `+${HEALTH_REWARD}`, title: 'Health', color: '#E0675E', text: `+${HEALTH_REWARD} cells on your health grid`, full: 'Health is full' },
+            { kind: 'grid' as const, badge: '+1', title: 'Grid', color: GREY.text, text: '+1 row or column for cards', full: 'Grid is 5×5' },
+            { kind: 'cards' as const, badge: `×${CARDS_REWARD}`, title: 'Cards', color: '#6FA3D2', text: `${CARDS_REWARD} random cards · one duplicate`, full: '' },
         ];
         specs.forEach((spec, i) => {
             const opt = options.find((o) => o.kind === spec.kind)!;
-            const x = L + w / 2 + i * (w + gap);
-            const cardNode = makeNode(root, `Reward ${spec.kind}`, w, h + 7, { x, y: top - (h + 7) / 2 });
-            makeSprite(cardNode, 'Panel', kit.panelCream, w, h + 7, {}, true);
+            const x = left + cw / 2 + i * (cw + gap);
             const selected = this.choice?.kind === spec.kind;
-            if (selected) makeSprite(cardNode, 'Picked', kit.cardFrameGold, w + 12, h + 12, { y: 3 }, true);
-            makeLabel(cardNode, 'Badge', spec.badge, { size: FONT.label + 6, color: COLOR.ink, align: 'left', x: -w / 2 + 24, y: h / 2 - 30 });
+            const cardNode = makeNode(root, `Reward ${spec.kind}`, cw, h, { x, y: top - h / 2 });
+            if (selected) makeSprite(cardNode, 'Picked', kit.cardFrameGold, cw + 12, h + 12, {}, true);
+            box(cardNode, 'Back', cw, h, {}, selected ? GREY.lit : GREY.raised);
+            makeLabel(cardNode, 'Badge', spec.badge, { size: FONT.label + 6, color: GREY.text, align: 'left', x: -cw / 2 + 20, y: h / 2 - 28 });
 
-            // With + Row / + Col buttons at the bottom, the Grid card moves up and uses a
-            // one-line description that ends above the buttons (they used to cover it).
             const twoButtons = spec.kind === 'grid' && opt.available && (opt.directions ?? []).length === 2;
-
-            // Icon
-            const iconY = h / 2 - (twoButtons ? 92 : 105);
+            const iconY = h / 2 - 72;
             if (spec.kind === 'health') makeSprite(cardNode, 'Icon', kit.frame('ui/icons/reward_health'), 65, 55, { y: iconY });
             else if (spec.kind === 'grid') makeSprite(cardNode, 'Icon', kit.frame('ui/icons/reward_grid'), 70, 55, { y: iconY });
             else [-1, 0, 1].forEach((k) => {
                 const back = makeSprite(cardNode, `Back${k}`, kit.frame('cards/updated/back'), 45, 63, { x: k * 34, y: iconY });
                 back.node.angle = -k * 8;
             });
+            makeLabel(cardNode, 'Title', spec.title, { size: FONT.heading, color: spec.color, y: iconY - 60 });
+            if (twoButtons) makeLabel(cardNode, 'Text', 'Add a row or a column', { font: 'body', size: 24, color: GREY.soft, y: iconY - 96, width: cw - 30, height: 30 });
+            else makeLabel(cardNode, 'Text', opt.available ? spec.text : spec.full, { font: 'body', size: 24, color: GREY.soft, y: iconY - 96, width: cw - 30, height: 56, anchorY: 1 });
 
-            makeLabel(cardNode, 'Title', spec.title, { size: FONT.heading, color: spec.color, y: iconY - (twoButtons ? 64 : 72) });
-            if (twoButtons) makeLabel(cardNode, 'Text', 'Add a row or a column', { font: 'body', size: 24, color: '#3D3450', y: iconY - 104, width: w - 40, height: 30 });
-            else makeLabel(cardNode, 'Text', opt.available ? spec.text : spec.full, { font: 'body', size: 24, color: '#3D3450', y: iconY - 120, width: w - 40, height: 60, anchorY: 1 });
-
-            if (!opt.available) {
-                cardNode.addComponent(UIOpacity).opacity = 110; // shown, but dimmed and not clickable
+            // Step 2 waits for step 1: shown, but greyed and not clickable.
+            if (!opt.available || !open) {
+                cardNode.addComponent(UIOpacity).opacity = open ? 110 : 90;
                 return;
             }
             if (spec.kind === 'grid') {
                 const dirs = opt.directions ?? [];
                 if (dirs.length === 2) {
-                    // Two small buttons: + Row / + Column.
-                    const bw = (w - 60) / 2;
+                    const bw = (cw - 52) / 2;
                     (['row', 'col'] as const).forEach((dir, k) => {
                         const isOn = this.choice?.kind === 'grid' && this.choice.add === dir;
-                        makeButton(cardNode, `Grid ${dir}`, isOn ? ButtonStyle.Red : ButtonStyle.Cream, dir === 'row' ? '+ Row' : '+ Col', bw, 70, { x: -w / 2 + 24 + bw / 2 + k * (bw + 12), y: -h / 2 + 50 }, () => this.choose({ kind: 'grid', add: dir }), 24);
+                        makeButton(cardNode, `Grid ${dir}`, isOn ? ButtonStyle.Red : ButtonStyle.Cream, dir === 'row' ? '+ Row' : '+ Col', bw, 64, { x: -cw / 2 + 20 + bw / 2 + k * (bw + 12), y: -h / 2 + 46 }, () => this.choose({ kind: 'grid', add: dir }), 24);
                     });
                     return;
                 }

@@ -122,7 +122,7 @@ export class BlockInputEvents extends Component {}
 export class Mask extends Component { type = 0; inverted = false; segments = 64; static Type = { GRAPHICS_RECT: 0, GRAPHICS_ELLIPSE: 1, GRAPHICS_STENCIL: 2, SPRITE_STENCIL: 3 }; }
 export class Graphics extends Component {
     lineWidth = 1; strokeColor = new Color(); fillColor = new Color();
-    clear() {} moveTo() {} lineTo() {} stroke() {} fill() {} rect() {} ellipse() {} circle() {} close() {} roundRect() {}
+    clear() {} arc() {} moveTo() {} lineTo() {} stroke() {} fill() {} rect() {} ellipse() {} circle() {} close() {} roundRect() {}
 }
 export class Layout extends Component {}
 export class AudioClip { name = ''; }

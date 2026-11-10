@@ -1,18 +1,17 @@
 // Hands of Fate — ui/views.ts
 // Small building blocks shared by the planning and fight screens:
 //   CardView        a card's art, with the gold "in a hand" ring and pink "selected" ring
-//   buildHandLabel  the dark panels next to rows and under columns
 //   buildHealthGrid the grid of health cells
 //   buildMiniBoard  an opponent's table, small
-// All sizes are in 1080-wide design pixels.
+// Hand badges and the hand list live in table.ts.
 
 import { _decorator, Component, Node, Sprite, UITransform } from 'cc';
 import { Card, Rank, rankLabel, SUIT_NAME } from '../core/cards';
 import { Grid } from '../core/grid';
 import { Hand } from '../core/evaluate';
-import { HAND_INFO, HandCategory, EFFECT_NAME, EFFECT_CHARGES } from '../core/hands';
+import { HandCategory } from '../core/hands';
 import { HealthGrid, healthCols } from '../core/health';
-import { UiKit, makeNode, makeSprite, makeLabel, FONT, COLOR, caps, textWidth } from './UiKit';
+import { UiKit, makeNode, makeSprite } from './UiKit';
 import { AnimatedCard } from './AnimatedCard';
 const { ccclass } = _decorator;
 
@@ -88,89 +87,6 @@ export function cardWords(c: Pick<Card, 'suit' | 'rank'>): string {
 /** "3.5s" */
 export function cooldownText(seconds: number): string { return `${seconds.toFixed(1)}s`; }
 
-// ---- Hand labels ------------------------------------------------------------------
-
-export interface HandLabelParts {
-    node: Node;
-    /** Cooldown bar fill (the fight screen scales it). */
-    fill: Node | null;
-    fillWidth: number;
-    /** Charge pip nodes, left to right (the fight screen greys spent ones). */
-    pips: Node[];
-}
-
-/**
- * The panel beside a row. With no hand: "NO HAND" (row not full) or "–".
- * `full` = the line is full (so "–" means no pair or better).
- */
-export function buildRowLabel(parent: Node, hand: Hand | null, full: boolean, w: number, h: number, x: number, y: number): HandLabelParts {
-    const kit = UiKit.get();
-    const node = makeSprite(parent, 'RowLabel', kit.panelDark, w, h + 6, { x, y: y - 3 }, true).node;
-    const left = -w / 2 + 27;
-    const top = h / 2;
-    if (!hand) {
-        makeLabel(node, 'None', full ? '–' : 'NO HAND', { size: FONT.label, spacing: 2, color: COLOR.dim, align: 'left', x: left, y: 3 });
-        return { node, fill: null, fillWidth: 0, pips: [] };
-    }
-    // Title: THREE OF A KIND, or FLUSH ♥ · ×2
-    const title = makeLabel(node, 'Title', caps(HAND_INFO[hand.category].name), { size: FONT.label, spacing: 2, color: COLOR.cream, align: 'left', x: left, y: top - 30 });
-    if (hand.multiplier > 1) {
-        let tx = left + textWidth(title) + 10;
-        makeSprite(node, 'TitleIcon', kit.suitIcon(hand.suit), 18, 18, { x: tx + 9, y: top - 30 });
-        tx += 26;
-        makeLabel(node, 'Mult', `· ×${hand.multiplier}`, { size: FONT.label, color: COLOR.cream, align: 'left', x: tx, y: top - 30 });
-    }
-    // Effect line: [icon] Attack · 3.5s  ♥♥♥
-    const midY = 0;
-    makeSprite(node, 'Icon', kit.suitIcon(hand.suit), 27, 27, { x: left + 13, y: midY });
-    const effect = makeLabel(node, 'Effect', `${EFFECT_NAME[hand.effect]} · ${cooldownText(hand.cooldown)}`, { font: 'body', size: FONT.body, color: COLOR.cream, align: 'left', x: left + 38, y: midY });
-    const pips: Node[] = [];
-    const charges = EFFECT_CHARGES[hand.effect];
-    if (Number.isFinite(charges)) {
-        let px = left + 38 + textWidth(effect) + 16;
-        for (let i = 0; i < charges; i++) {
-            pips.push(makeSprite(node, `Pip${i}`, kit.suitIcon(hand.suit), 24, 24, { x: px + 12, y: midY }).node);
-            px += 28;
-        }
-    }
-    // Cooldown bar (full while planning)
-    const barW = w - 54;
-    const barY = -h / 2 + 24;
-    makeSprite(node, 'BarTrack', kit.barTrack, barW, 12, { x: 0, y: barY }, true);
-    const fill = makeSprite(node, 'BarFill', kit.barFill, barW, 12, { x: -barW / 2, y: barY, anchorX: 0 }, true).node;
-    return { node, fill, fillWidth: barW, pips };
-}
-
-/** The small panel under a column: PAIR / ♥ 4.0 / ♥♥♥ / bar. */
-export function buildColumnLabel(parent: Node, hand: Hand | null, full: boolean, w: number, h: number, x: number, y: number): HandLabelParts {
-    const kit = UiKit.get();
-    const node = makeSprite(parent, 'ColLabel', kit.panelDark, w, h + 6, { x, y: y - 3 }, true).node;
-    if (!hand) {
-        makeLabel(node, 'None', full ? '–' : '·', { size: FONT.label, color: COLOR.dim, y: 3 });
-        return { node, fill: null, fillWidth: 0, pips: [] };
-    }
-    // Four rows in a ~99 px panel: title, icon + cooldown, pips, bar.
-    const top = h / 2;
-    const titleY = top - 20, rowY = top - 44, pipY = top - 68, barY = -h / 2 + 14;
-    makeLabel(node, 'Title', SHORT[hand.category], { size: FONT.labelSmall, spacing: 1, color: COLOR.cream, y: titleY });
-    const row = makeNode(node, 'Row', 0, 0, { y: rowY });
-    const cd = makeLabel(row, 'Cooldown', hand.cooldown.toFixed(1), { font: 'body', size: FONT.bodySmall, color: COLOR.cream, align: 'left', x: 0 });
-    const total = 22 + 4 + textWidth(cd);
-    makeSprite(row, 'Icon', kit.suitIcon(hand.suit), 22, 22, { x: -total / 2 + 11 });
-    cd.node.setPosition(-total / 2 + 26, 0);
-    const pips: Node[] = [];
-    const charges = EFFECT_CHARGES[hand.effect];
-    if (Number.isFinite(charges)) {
-        for (let i = 0; i < charges; i++) {
-            pips.push(makeSprite(node, `Pip${i}`, kit.suitIcon(hand.suit), 18, 18, { x: (i - (charges - 1) / 2) * 22, y: pipY }).node);
-        }
-    }
-    const barW = w - 30;
-    makeSprite(node, 'BarTrack', kit.barTrack, barW, 12, { x: 0, y: barY }, true);
-    const fill = makeSprite(node, 'BarFill', kit.barFillGold, barW, 12, { x: -barW / 2, y: barY, anchorX: 0 }, true).node;
-    return { node, fill, fillWidth: barW, pips };
-}
-
 // ---- Health grid --------------------------------------------------------------------
 
 export interface HealthGridParts {
@@ -182,15 +98,18 @@ export interface HealthGridParts {
 
 /**
  * Draws a health grid that fits inside maxW × maxH, anchored at its top-left
- * corner (x, y). Cells are at most 30 px with a 6 px gap, like the mockups.
+ * corner (x, y). Cells are at most 36 px apart by default (maxPitch), with a 20% gap.
  */
-export function buildHealthGrid(parent: Node, health: HealthGrid | number, maxW: number, maxH: number, x: number, y: number): HealthGridParts {
+/** Their health grid has room for bigger cells (opponent panel). */
+export const THEIR_PITCH = 52;
+
+export function buildHealthGrid(parent: Node, health: HealthGrid | number, maxW: number, maxH: number, x: number, y: number, maxPitch = 36): HealthGridParts {
     const kit = UiKit.get();
     const count = typeof health === 'number' ? health : health.cells.length;
     const cols = typeof health === 'number' ? healthCols(count) : health.cols;
     const rows = Math.ceil(count / cols);
     const gapRatio = 0.2;
-    const pitch = Math.min(36, Math.floor(maxW / (cols - gapRatio)), Math.floor(maxH / (rows - gapRatio)));
+    const pitch = Math.min(maxPitch, Math.floor(maxW / (cols - gapRatio)), Math.floor(maxH / (rows - gapRatio)));
     const size = Math.max(4, Math.round(pitch * (1 - gapRatio)));
     const width = cols * pitch - (pitch - size);
     const height = rows * pitch - (pitch - size);
