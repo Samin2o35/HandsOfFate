@@ -24,6 +24,10 @@ export interface Settings {
     /** Music on/off and sound effects on/off (Options). */
     music: boolean;
     sfx: boolean;
+    /** Smoke background: full, low (slower, no puffs) or off (Options). */
+    motion: 'full' | 'low' | 'off';
+    /** Screen shake and zoom in fights (Options). */
+    shake: boolean;
 }
 
 /** The tutorial run always uses this seed: its round 1 (Jack of Spades' table) is a fair first fight. */
@@ -54,7 +58,7 @@ function write(key: string, value: string | null) {
 
 class GameState {
     profile: Profile = newProfile();
-    settings: Settings = { speed: 'medium', tutorialDone: false, tutorialStep: 0, music: true, sfx: true };
+    settings: Settings = { speed: 'medium', tutorialDone: false, tutorialStep: 0, music: true, sfx: true, motion: 'full', shake: true };
     /** Aces earned since a screen last showed them (the celebration pops up once). */
     pendingAces: AceId[] = [];
     run: Run | null = null;

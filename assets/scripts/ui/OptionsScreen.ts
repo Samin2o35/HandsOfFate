@@ -8,6 +8,7 @@ import { GameScreen } from './GameScreen';
 import { Game, SPEEDS, SPEED_NAME } from '../app/Game';
 import { ScreenManager } from '../app/ScreenManager';
 import { Sound } from '../app/Sound';
+import { Smoke } from '../app/Smoke';
 import { UiKit, makeNode, makeSprite, makeLabel, makeButton, clearChildren, FONT, COLOR } from './UiKit';
 import { ButtonStyle } from './UiButton';
 import { confirmBox } from './Modal';
@@ -80,11 +81,30 @@ export class OptionsScreen extends GameScreen {
         toggle('music', 'Music', 0);
         toggle('sfx', 'Effects', 1);
 
-        // Right column: tutorial, then progress.
+        // Right column: tutorial, motion, then progress.
         y = T - 240;
         sectionTitle('TutTitle', 'TUTORIAL', rightX, y);
         y -= 70;
         makeButton(root, 'Replay', ButtonStyle.Cream, 'Replay the tutorial', colW, 100, { x: rightX, y }, () => this.replayTutorial());
+
+        // Background motion cycles Full → Low → Off; Screen shake (and the fight zoom) on or off.
+        y -= 180;
+        sectionTitle('MotionTitle', 'MOTION', rightX, y);
+        y -= 70;
+        const motion = Game.settings.motion ?? 'full';
+        const MOTION_NAME = { full: 'Full', low: 'Low', off: 'Off' } as const;
+        makeButton(root, 'Motion', motion === 'off' ? ButtonStyle.Dark : ButtonStyle.Cream, `Background: ${MOTION_NAME[motion]}`, hw, 100, { x: rightX - colW / 2 + hw / 2, y }, () => {
+            Game.settings.motion = motion === 'full' ? 'low' : motion === 'low' ? 'off' : 'full';
+            Game.saveSettings();
+            Smoke.applyMotion();
+            this.build();
+        }, 27);
+        const shakeOn = Game.settings.shake !== false;
+        makeButton(root, 'Shake', shakeOn ? ButtonStyle.Cream : ButtonStyle.Dark, `Screen shake: ${shakeOn ? 'On' : 'Off'}`, hw, 100, { x: rightX - colW / 2 + hw / 2 + hw + gap, y }, () => {
+            Game.settings.shake = !shakeOn;
+            Game.saveSettings();
+            this.build();
+        }, 27);
 
         y -= 180;
         sectionTitle('ResetTitle', 'PROGRESS', rightX, y);

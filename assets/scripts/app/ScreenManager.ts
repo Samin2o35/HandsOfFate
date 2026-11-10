@@ -15,6 +15,9 @@ import { _decorator, Component, Node, Prefab, instantiate, UIOpacity, UITransfor
 import { GameScreen } from '../ui/GameScreen';
 import { Game } from './Game';
 import { Sound } from './Sound';
+import { Smoke } from './Smoke';
+import { Run } from '../core/run';
+import { Suit } from '../core/cards';
 import { registerPreview } from './Preview';
 const { ccclass, property } = _decorator;
 
@@ -50,6 +53,7 @@ export class ScreenManager extends Component {
         ScreenManager.instance = this;
         Game.load();
         if (!this.getComponent(Sound)) this.addComponent(Sound);
+        if (!this.getComponent(Smoke)) this.addComponent(Smoke);
         registerPreview((name, params) => ScreenManager.show(name, params));
     }
 
@@ -83,6 +87,10 @@ export class ScreenManager extends Component {
             return false;
         }
         this.currentName = name;
+        // The smoke goes back to the felt colour; the boss intro, a boss round's planning
+        // and its fight set their King's colour themselves. Run over keeps a lost run's dark.
+        Smoke.tint(bossSuitFor(name, params));
+        if (name !== 'RunOver') Smoke.mood(false);
         // Already switching: the latest request wins once the old screen has faded out.
         if (this.switching) { this.pending = { name, params }; return true; }
 
@@ -159,4 +167,11 @@ export class ScreenManager extends Component {
         this.blocker.active = on;
         if (on) this.blocker.setSiblingIndex(root.children.length - 1);
     }
+}
+
+/** The King's suit when this screen shows a boss table, else null. */
+function bossSuitFor(name: string, params: unknown): Suit | null {
+    if (name !== 'BossIntro' && name !== 'Planning' && name !== 'Fight') return null;
+    const run = (params as { run?: Run } | undefined)?.run ?? Game.run;
+    return run?.isBoss ? run.opponent.boss?.suit ?? null : null;
 }

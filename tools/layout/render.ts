@@ -80,6 +80,20 @@ async function main() {
             }
         }
         comp.onShow?.(params);
+        if (process.env.SIMULATE && screen === 'Fight') {
+            // Play the whole fight frame by frame (tweens finish at once) and report.
+            const cc: any = await import('cc');
+            cc.setSyncTweens(true);
+            await new Promise((r) => setTimeout(r, 20));
+            const { flow } = { flow: await import('../../assets/scripts/ui/flow') };
+            (flow as any).finishRound = () => undefined;
+            let frames = 0;
+            for (; frames < 60 * 200; frames++) {
+                comp.update(1 / 60);
+                if (comp.ending) break;
+            }
+            console.log(`SIM frames=${frames} ending=${comp.ending} inFlight=${comp.inFlight} winner=${comp.fight?.winner} events-ok`);
+        }
     }
     await new Promise((r) => setTimeout(r, 50));
 

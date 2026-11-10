@@ -247,6 +247,8 @@ export interface OpponentPanelParts {
     healthArea: Region;
     /** Their hand lines by hand id (the fight lights them when they fire). */
     lines: Map<string, Sprite>;
+    /** The portrait (boss twists fly from it). */
+    avatar: Node;
 }
 
 /**
@@ -259,7 +261,8 @@ export function buildOpponentPanel(root: Node, r: Region, o: Opponent, hands: re
     const panel = box(root, 'Opponent', r.width, r.height, { x: r.left + r.width / 2, y: r.top - r.height / 2 }, GREY.panel).node;
     const x0 = -r.width / 2 + 30, y0 = r.height / 2 - 30;
     const aw = 135, ah = 189;
-    buildAvatar(panel, 'Avatar', o.avatar, !!o.boss, aw, ah, { x: x0 + aw / 2, y: y0 - ah / 2 });
+    const avatar = makeNode(panel, 'AvatarHolder', aw, ah, { x: x0 + aw / 2, y: y0 - ah / 2 });
+    buildAvatar(avatar, 'Avatar', o.avatar, !!o.boss, aw, ah, {});
     const tx = x0 + aw + 30, tw = r.width / 2 - 30 - tx;
     makeLabel(panel, 'Name', o.name, { size: FONT.heading, color: GREY.text, align: 'left', x: tx, y: y0 - 18, width: tw, height: 40 });
     const sub = o.boss ? `Boss · tier ${tierNumeral(o.boss.tier)}` : 'Their table';
@@ -299,7 +302,7 @@ export function buildOpponentPanel(root: Node, r: Region, o: Opponent, hands: re
 
     // Their health: the bottom of the panel, centred.
     makeLabel(panel, 'HealthTitle', o.boss ? 'HIS HEALTH' : 'THEIR HEALTH', { size: FONT.labelSmall, spacing: 2, color: GREY.soft, align: 'left', x: x0, y: -r.height / 2 + 30 + healthH + 16 });
-    return { node: panel, healthArea: { left: x0, top: -r.height / 2 + 30 + healthH, width: r.width - 60, height: healthH }, lines };
+    return { node: panel, healthArea: { left: x0, top: -r.height / 2 + 30 + healthH, width: r.width - 60, height: healthH }, lines, avatar };
 }
 
 /** World rectangle of a node (tutorial spotlights). */

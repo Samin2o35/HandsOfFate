@@ -1,0 +1,140 @@
+// Hands of Fate — smoke.effect (plan phase 3)
+// The coloured smoke behind the table. A full-screen sprite runs this; every
+// output pixel is snapped to a 320×180 grid (grid uniform) and stepped into 5
+// colours (two room darks and three tint levels), so it reads as pixel art next
+// to the cards, not as a smooth gradient. Domain-warped value noise (warped
+// twice, plus a ridge for wisps) makes it fold like smoke; a vignette keeps the
+// middle (the boards) dark and quiet. Low motion uses a single warp.
+// Cost: it runs per screen pixel (the 320×180 look is a snap, not a smaller
+// render); measure on a phone in the phase 3 check.
+// Driven by app/Smoke.ts: time, tint, darkness and puffs come from code.
+
+CCEffect %{
+  techniques:
+  - passes:
+    - vert: smoke-vs:vert
+      frag: smoke-fs:frag
+      depthStencilState:
+        depthTest: false
+        depthWrite: false
+      blendState:
+        targets:
+        - blend: true
+          blendSrc: src_alpha
+          blendDst: one_minus_src_alpha
+          blendDstAlpha: one_minus_src_alpha
+      rasterizerState:
+        cullMode: none
+      properties:
+        tint:   { value: [0.19, 0.61, 0.39, 0.45] }
+        params: { value: [0.0, 0.0, 0.0, 0.0] }
+        puff:   { value: [0.5, 0.5, 9.0, 0.0] }
+        grid:   { value: [320.0, 180.0, 0.0, 0.0] }
+}%
+
+CCProgram smoke-vs %{
+  precision highp float;
+  #include <builtin/uniforms/cc-global>
+
+  in vec3 a_position;
+  in vec2 a_texCoord;
+  in vec4 a_color;
+
+  out vec4 color;
+
+  vec4 vert () {
+    vec4 pos = vec4(a_position, 1);
+    pos = cc_matViewProj * pos;
+    color = a_color;
+    return pos;
+  }
+}%
+
+CCProgram smoke-fs %{
+  precision highp float;
+  #include <builtin/uniforms/cc-global>
+
+  in vec4 color;
+
+  uniform Smoke {
+    vec4 tint;    // rgb: smoke colour (felt or the King's suit); a: how much of it shows
+    vec4 params;  // x: time (seconds, speed already applied); y: darkness 0..1 (run lost); z: 1 full detail, 0 low
+    vec4 puff;    // xy: puff centre (0..1 of the screen); z: age in seconds; w: strength
+    vec4 grid;    // xy: pixel grid (320×180 on 16:9)
+  };
+
+  float hash (vec2 p) {
+    p = fract(p * vec2(123.34, 456.21));
+    p += dot(p, p + 45.32);
+    return fract(p.x * p.y);
+  }
+
+  float noise (vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    float a = hash(i);
+    float b = hash(i + vec2(1.0, 0.0));
+    float c = hash(i + vec2(0.0, 1.0));
+    float d = hash(i + vec2(1.0, 1.0));
+    return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+  }
+
+  float fbm (vec2 p) {
+    float v = 0.0;
+    float a = 0.5;
+    for (int i = 0; i < 3; i++) {
+      v += a * noise(p);
+      p = p * 2.03 + vec2(1.7, 9.2);
+      a *= 0.5;
+    }
+    return v;
+  }
+
+  vec4 frag () {
+    // Snap to the pixel grid: every smoke pixel is a solid block.
+    vec2 uv = gl_FragCoord.xy * cc_screenSize.zw;
+    vec2 cell = (floor(uv * grid.xy) + 0.5) / grid.xy;
+    float aspect = grid.x / grid.y;
+    vec2 p = vec2(cell.x * aspect, cell.y) * 2.2;
+    float t = params.x;
+
+    // Warp the noise by itself twice: slow, folding smoke.
+    vec2 q = vec2(fbm(p + vec2(0.0, t * 0.04)), fbm(p + vec2(5.2, 1.3) - t * 0.03));
+
+    // A puff pushes the smoke outward from where a hand fired or a hit landed.
+    vec2 d = cell - puff.xy;
+    d.x *= aspect;
+    float ring = exp(-abs(length(d) - puff.z * 0.6) * 9.0) * exp(-puff.z * 2.5) * puff.w;
+    q += normalize(d + vec2(0.0001)) * ring;
+
+    float n;
+    if (params.z > 0.5) {
+      // Full: a second warp and thin bright wisps where the smoke folds over.
+      vec2 r = vec2(fbm(p + 3.5 * q + vec2(1.7, 9.2) + t * 0.05), fbm(p + 3.5 * q + vec2(8.3, 2.8) - t * 0.04));
+      n = fbm(p + 3.5 * r);
+      float wisp = 1.0 - abs(fbm(p * 1.6 + 2.0 * r) * 2.0 - 1.0);
+      n = n * 0.75 + pow(wisp, 4.0) * 0.45;
+    } else {
+      // Low: one warp, about a third of the work, for slower phones.
+      n = fbm(p + 2.6 * q);
+    }
+
+    // Vignette: dark and quiet behind the boards, brighter toward the edges.
+    vec2 c = cell - 0.5;
+    c.x *= aspect;
+    float edge = smoothstep(0.2, 0.95, length(c) * 1.15);
+    float v = n * (0.3 + 0.75 * edge) * (1.0 - params.y * 0.65);
+
+    // Five flat steps: room dark, room panel, then three levels of the tint.
+    float s = floor(clamp(v * 1.25, 0.0, 0.999) * 5.0);
+    vec3 room0 = vec3(0.086, 0.071, 0.110);   // #16121C
+    vec3 room1 = vec3(0.141, 0.118, 0.180);   // #241E2E
+    vec3 col = room0;
+    if (s >= 1.0) col = room1;
+    if (s >= 2.0) col = mix(room1, tint.rgb, 0.20 * tint.a);
+    if (s >= 3.0) col = mix(room1, tint.rgb, 0.38 * tint.a);
+    if (s >= 4.0) col = mix(room1, tint.rgb, 0.58 * tint.a);
+    return vec4(col, 1.0);
+  }
+}%

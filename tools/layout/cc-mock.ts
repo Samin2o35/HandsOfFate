@@ -6,7 +6,13 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-export class Vec3 { constructor(public x = 0, public y = 0, public z = 0) {} clone() { return new Vec3(this.x, this.y, this.z); } }
+export class Vec3 {
+    constructor(public x: any = 0, public y = 0, public z = 0) { if (typeof x === 'object') { this.x = x.x; this.y = x.y; this.z = x.z; } }
+    clone() { return new Vec3(this.x, this.y, this.z); }
+    add(o: Vec3) { this.x += o.x; this.y += o.y; this.z += o.z; return this; }
+    multiplyScalar(k: number) { this.x *= k; this.y *= k; this.z *= k; return this; }
+    static distance(a: Vec3, b: Vec3) { return Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z); }
+}
 export class Vec2 { constructor(public x = 0, public y = 0) {} }
 export class Size { constructor(public width = 0, public height = 0) {} }
 export class Rect {
@@ -132,11 +138,30 @@ export class EventTouch { getUILocation() { return new Vec2(); } }
 export class Camera extends Component {}
 export function instantiate(p: any) { return new Node(p?.data?.name ?? 'Instance'); }
 
-function chain(): any {
-    const t: any = new Proxy(function () {}, { get: (_o, k) => (k === 'then' ? undefined : () => t), apply: () => t });
+/** Tweens run instantly at start(): 'to'/'by' jump to the end (calling onUpdate), 'call' runs. */
+export let syncTweens = false;
+export function setSyncTweens(on: boolean) { syncTweens = on; }
+function chain(target: any): any {
+    const steps: (() => void)[] = [];
+    const t: any = new Proxy(function () {}, {
+        get: (_o, k) => {
+            if (k === 'then') return undefined;
+            if (k === 'to' || k === 'by') return (_d: number, props: any, opts?: any) => {
+                steps.push(() => {
+                    if (target && props) for (const key of Object.keys(props)) { try { target[key] = props[key]; } catch { /* readonly */ } }
+                    opts?.onUpdate?.();
+                });
+                return t;
+            };
+            if (k === 'call') return (fn: () => void) => { steps.push(fn); return t; };
+            if (k === 'start') return () => { if (syncTweens) for (const s of steps) s(); return t; };
+            return () => t;
+        },
+        apply: () => t,
+    });
     return t;
 }
-export function tween(_target?: any): any { return chain(); }
+export function tween(target?: any): any { return chain(target); }
 export const Tween = { stopAllByTarget() {} };
 
 const store = new Map<string, string>();
@@ -147,7 +172,7 @@ export const sys = {
 export const game = { end() {}, frameRate: 60 };
 export const director = { getScene: () => null, getTotalTime: () => 0, getDeltaTime: () => 1 / 60 };
 export const screen = { windowSize: new Size(1920, 1080), on() {}, off() {} };
-export const view = { setDesignResolutionSize() {}, getVisibleSize: () => new Size(1920, 1080) };
+export const view = { setDesignResolutionSize() {}, getVisibleSize: () => new Size(1920, 1080), on() {}, off() {} };
 export const ResolutionPolicy = { FIXED_WIDTH: 0, FIXED_HEIGHT: 1, SHOW_ALL: 2 };
 export const dynamicAtlasManager = { enabled: false };
 export const resources = { load(p: string, _t: any, cb: any) { cb?.(null, new SpriteFrame(p)); }, loadDir(_p: string, _t: any, cb: any) { cb?.(null, []); } };
@@ -171,3 +196,11 @@ export const _decorator = {
     disallowMultiple: (cls: any) => cls,
 };
 export function Enum<T>(e: T): T { return e; }
+export class Vec4 {
+    constructor(public x = 0, public y = 0, public z = 0, public w = 0) {}
+    clone() { return new Vec4(this.x, this.y, this.z, this.w); }
+    equals(o: Vec4) { return o.x === this.x && o.y === this.y && o.z === this.z && o.w === this.w; }
+    static lerp(out: Vec4, a: Vec4, b: Vec4, t: number) { out.x = a.x + (b.x - a.x) * t; out.y = a.y + (b.y - a.y) * t; out.z = a.z + (b.z - a.z) * t; out.w = a.w + (b.w - a.w) * t; return out; }
+}
+export class EffectAsset {}
+export class Material { initialize() {} setProperty() {} }

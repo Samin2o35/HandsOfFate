@@ -8,9 +8,15 @@
 //   - cells change on the target grid with a flash ring, sparks and a number
 //   - round time and the live round score sit in the top strip
 // Slow / Medium / Fast under the opponent panel; Options pauses. When a side's
-// grid is empty: "ROUND WON" or "THE KING HAS FALLEN", then the round is scored
-// and the next screen shown (see flow.ts). Projectiles, freeze, shake and zoom
-// come in plan phase 3.
+// grid is empty and the last projectile has landed: "ROUND WON" or "THE KING HAS
+// FALLEN", then the round is scored and the next screen shown (see flow.ts).
+//
+// Feel (plan phase 3, ui/juice.ts): a hand's cards lift and glow in its last
+// 0.4 s; when it fires they pop and each throws a projectile (by suit) at the
+// cells it will change. The rules are applied at once (they stay exact); the
+// picture of those cells changes when the projectile lands, with a number, a
+// hit-stop, a shake of the game layer and, for a full house or better, a small
+// zoom. Boss twists dim the lights. Smoke puffs on fires and big hits.
 
 import { _decorator, Node, UITransform, Widget, Color, UIOpacity, Sprite, Label, tween, Vec3 } from 'cc';
 import { GameScreen } from './GameScreen';
@@ -26,7 +32,12 @@ import { UiKit, makeNode, makeSprite, makeLabel, makeButton, clearChildren, FONT
 import { ButtonStyle, UiButton } from './UiButton';
 import { BoardView, worldRect, unionRects } from './BoardView';
 import { buildHealthGrid, paintHealth, HealthGridParts, THEIR_PITCH } from './views';
-import { flashRing, sparks, floatText, shake, FX_COLOR } from './fx';
+import { flashRing, sparks, FX_COLOR } from './fx';
+import { launch, popNumber, tickJuice, Rig, dimLights, starBurst, firePop } from './juice';
+import { Smoke } from '../app/Smoke';
+import { shake } from './fx';
+import { Suit } from '../core/cards';
+import { HandCategory } from '../core/hands';
 import { finishRound } from './flow';
 import { Sound } from '../app/Sound';
 import { tutorialStep, setTutorialStep, showTutorial } from './Tutorial';
@@ -39,6 +50,10 @@ const { ccclass } = _decorator;
 const END_PAUSE = 1.6; // seconds of "ROUND WON" before moving on
 const FLASH = 0.35;    // how long a firing hand stays lit
 const HEALTH_H = 150;
+const CHARGE = 0.4;    // game-seconds before firing when a hand's cards lift and glow
+const LIFT = 10;
+/** Full house or better gets the zoom. */
+const BIG = new Set<HandCategory>(['fullHouse', 'quads', 'straightFlush']);
 const STASH_H = 180; // planning's stash height, kept free so the list matches planning
 
 /** What changed on a grid because of one event. */
@@ -61,6 +76,15 @@ export class FightScreen extends GameScreen {
     /** Hand ids lit until this game-time-independent clock (seconds of real time). */
     private litUntil = new Map<string, number>();
     private clock = 0;
+    /** What the health grids show: changes when projectiles land (view changes at once). */
+    private shown: Record<SideId, HealthGrid> | null = null;
+    private inFlight = 0;
+    private lastLaunch = 0;
+    private freezeUntil = 0;
+    private rig: Rig | null = null;
+    private cardBase = new Map<number, Vec3>();
+    private popUntil = new Map<number, number>();
+    private avatar: Node | null = null;
 
     private content: Node | null = null;
     private fx: Node | null = null;
@@ -82,6 +106,7 @@ export class FightScreen extends GameScreen {
         if (!this.node.isValid) return;
         this.fight = run.startFight();
         this.view = { player: cloneHealthGrid(this.fight.player.health), enemy: cloneHealthGrid(this.fight.enemy.health) };
+        this.shown = { player: cloneHealthGrid(this.fight.player.health), enemy: cloneHealthGrid(this.fight.enemy.health) };
         this.build();
     }
 
@@ -89,13 +114,22 @@ export class FightScreen extends GameScreen {
         const f = this.fight;
         if (!f || !this.content) return;
         this.clock += dt;
+        tickJuice(dt);
+        this.rig?.update(dt);
         this.refreshLit();
         if (this.paused || this.ending) return;
+        this.refreshCharge();
+        if (f.over) {
+            // The banner waits for the last projectile (at most 1.2 s, in case one never lands).
+            if (this.inFlight === 0 || this.clock - this.lastLaunch > 1.2) this.end();
+            return;
+        }
+        // Hit-stop: the fight holds for a few frames after a heavy hit.
+        if (this.clock < this.freezeUntil) return;
         const events = f.advance(dt * SPEED_MULTIPLIER[Game.settings.speed]);
         for (const e of events) this.show(e);
         this.refreshBars();
         this.refreshTexts();
-        if (f.over) this.end();
     }
 
     // ---- Building ------------------------------------------------------------------
@@ -132,11 +166,18 @@ export class FightScreen extends GameScreen {
         }, { changed: () => undefined, selected: () => undefined }, null, false);
         this.badgeFor.clear();
         for (const b of [...this.board.badges.rows, ...this.board.badges.cols]) if (b.hand) this.badgeFor.set(b.hand.id, b);
+        this.cardBase.clear();
+        for (const h of f.player.hands) for (const pc of h.hand.cards) {
+            const v = this.board.viewFor(pc.card.id);
+            if (v) this.cardBase.set(pc.card.id, v.node.position.clone());
+        }
+        this.rig = new Rig(root);
 
         // Right: the opponent, their health large; speed buttons under it.
         const cooldown = new Map(f.enemy.hands.map((h) => [h.hand.id, h.cooldown] as [string, number]));
         const panel = buildOpponentPanel(root, g.opponent, run.opponent, f.enemy.hands.map((h) => h.hand), (h) => cooldown.get(h.id) ?? h.cooldown);
         this.theirLine = panel.lines;
+        this.avatar = panel.avatar;
         const a = panel.healthArea;
         const enemy = buildHealthGrid(panel.node, this.view!.enemy, a.width, a.height, a.left, a.top, THEIR_PITCH);
         enemy.node.setPosition(a.left + (a.width - enemy.width) / 2, a.top);
@@ -205,8 +246,31 @@ export class FightScreen extends GameScreen {
         if (entry) paintEntry(entry, 'firing');
         const badge = this.badgeFor.get(id);
         if (badge) setBoxColor(badge.back, '#5C4A2E');
-        const h = this.fight?.player.hands.find((x) => x.hand.id === id);
-        if (h) for (const pc of h.hand.cards) this.board?.viewFor(pc.card.id)?.setSelected(true);
+    }
+
+    /**
+     * Every frame: a hand's cards lift and get the pink ring in its last 0.4 s
+     * (and while it's lit after firing); the rest breathe a little.
+     */
+    private refreshCharge() {
+        const f = this.fight!;
+        const lift = new Map<number, number>();
+        for (const h of f.player.hands) {
+            if (h.charges <= 0) continue;
+            const left = (1 - f.progress(h)) * h.cooldown;
+            const lit = this.litUntil.has(`player:${h.hand.id}`);
+            const k = lit ? 1 : left < CHARGE ? 1 - left / CHARGE : 0;
+            for (const pc of h.hand.cards) lift.set(pc.card.id, Math.max(lift.get(pc.card.id) ?? 0, k));
+        }
+        for (const [id, base] of this.cardBase) {
+            const v = this.board?.viewFor(id);
+            if (!v?.isValid) continue;
+            const k = lift.get(id) ?? 0;
+            v.setSelected(k > 0);
+            if ((this.popUntil.get(id) ?? 0) > this.clock) continue;
+            const breathe = Math.sin(this.clock * 2.2 + id * 1.7) * 1.5;
+            v.node.setPosition(base.x, base.y + k * LIFT + breathe, 0);
+        }
     }
 
     private refreshLit() {
@@ -220,7 +284,6 @@ export class FightScreen extends GameScreen {
             const h = this.fight?.player.hands.find((x) => x.hand.id === id);
             const badge = this.badgeFor.get(id);
             if (badge) setBoxColor(badge.back, h && h.charges <= 0 ? GREY.slot : GREY.raised);
-            if (h) for (const pc of h.hand.cards) this.board?.viewFor(pc.card.id)?.setSelected(false);
         }
     }
 
@@ -231,12 +294,7 @@ export class FightScreen extends GameScreen {
         const before = target.cells.map((c) => ({ state: c.state, shield: c.shield }));
         applyEffect(target, e.effect, e.cells);
         const diff = diffOf(before, target);
-        const parts = this.grids[e.target];
-        if (parts) {
-            paintHealth(parts, target);
-            this.cellEffects(parts, e, diff);
-        }
-        playEventSound(e, diff);
+        const after = target.cells.map((c) => ({ state: c.state, shield: c.shield }));
 
         if (e.kind === 'hand') this.light(e.side, e.sourceId);
 
@@ -252,9 +310,72 @@ export class FightScreen extends GameScreen {
                 onSkip: () => { this.paused = false; },
             });
         }
+
+        const touched = Array.from(new Set(diff.destroyed.concat(diff.popped, diff.healed, diff.shielded)));
+        const parts = this.grids[e.target];
+        if (!parts || touched.length === 0) { playEventSound(e, diff); return; }
+
+        // Projectiles from the hand's cards (yours), their hand's line (theirs) or the King (a twist).
+        const suit: Suit = e.hand?.suit ?? this.run!.opponent.boss?.suit ?? 'S';
+        const sources = this.sourcesFor(e);
+        const targets = touched.map((i) => parts.cells[i].node.worldPosition);
+        if (e.kind === 'twist') {
+            dimLights(this.node);
+            if (this.avatar) shake(this.avatar, 8);
+        }
+        Smoke.puff(sources[0], 0.3);
+        this.inFlight++;
+        this.lastLaunch = this.clock;
+        let pending = sources.length;
+        sources.forEach((src, k) => launch(this.fx!, src, targets[k % targets.length], suit, () => {
+            if (--pending === 0) this.land(e, diff, after, touched);
+        }, e.kind === 'twist' ? 0.25 : 0));
     }
 
-    private cellEffects(parts: HealthGridParts, e: FightEvent, d: Diff) {
+    /** Where an event's projectiles start (world positions). */
+    private sourcesFor(e: FightEvent): Vec3[] {
+        if (e.kind === 'hand' && e.side === 'player' && e.hand) {
+            const out: Vec3[] = [];
+            for (const pc of e.hand.cards) {
+                const v = this.board?.viewFor(pc.card.id);
+                const base = this.cardBase.get(pc.card.id);
+                if (!v) continue;
+                out.push(v.node.worldPosition.clone());
+                if (base) { this.popUntil.set(pc.card.id, this.clock + 0.24); firePop(v.node, base.y); }
+            }
+            if (out.length) return out;
+        }
+        if (e.kind === 'hand' && e.side === 'enemy') {
+            const line = this.theirLine.get(e.sourceId);
+            if (line?.isValid) return [line.node.worldPosition.clone()];
+        }
+        return [(this.avatar ?? this.content!).worldPosition.clone()];
+    }
+
+    /** A projectile arrived: now the cells change, with the number, stop, shake and puff. */
+    private land(e: FightEvent, diff: Diff, after: { state: string; shield: boolean }[], touched: number[]) {
+        this.inFlight = Math.max(0, this.inFlight - 1);
+        const shown = this.shown![e.target];
+        for (const i of touched) {
+            shown.cells[i].state = after[i].state as typeof shown.cells[number]['state'];
+            shown.cells[i].shield = after[i].shield;
+        }
+        const parts = this.grids[e.target];
+        if (!parts?.node.isValid) return;
+        paintHealth(parts, shown);
+        const centre = this.cellEffects(parts, e, diff);
+        playEventSound(e, diff);
+        this.refreshTexts();
+        const hits = diff.destroyed.length;
+        if (hits) {
+            this.freezeUntil = Math.max(this.freezeUntil, this.clock + Math.min(0.08, 0.04 + hits * 0.008));
+            this.rig?.shake(Math.min(1, 0.12 + hits * 0.07));
+            Smoke.puff(centre, Math.min(1, 0.3 + hits * 0.1));
+        }
+        if (e.hand && BIG.has(e.hand.category)) this.rig?.punch(centre);
+    }
+
+    private cellEffects(parts: HealthGridParts, e: FightEvent, d: Diff): Vec3 {
         const fx = this.fx!;
         const size = parts.cells[0]?.node.getComponent(UITransform)?.width ?? 24;
         const ring = (i: number, color: string) => {
@@ -271,17 +392,16 @@ export class FightScreen extends GameScreen {
         for (const i of d.shielded) ring(i, FX_COLOR.shield);
 
         const touched = d.destroyed.concat(d.popped, d.healed, d.shielded);
-        if (touched.length === 0) return;
         const centre = new Vec3();
+        if (touched.length === 0) return centre;
         for (const i of touched) centre.add(parts.cells[i].node.worldPosition);
         centre.multiplyScalar(1 / touched.length);
-        if (d.destroyed.length) {
-            floatText(fx, centre, `-${d.destroyed.length}`, FX_COLOR.hit);
-            // Bigger hits shake harder (a straight flush cross is a lot of cells).
-            shake(parts.node, Math.min(14, 4 + d.destroyed.length));
-        } else if (d.healed.length) floatText(fx, centre, `+${d.healed.length}`, FX_COLOR.heal);
-        else if (d.shielded.length) floatText(fx, centre, `+${d.shielded.length}`, '#8FB8E0');
-        else if (d.popped.length) floatText(fx, centre, 'blocked', '#8FB8E0');
+        const suit = e.hand?.suit ?? null;
+        if (d.destroyed.length) popNumber(fx, parts.node, centre, `-${d.destroyed.length}`, FX_COLOR.hit, suit);
+        else if (d.healed.length) popNumber(fx, parts.node, centre, `+${d.healed.length}`, FX_COLOR.heal, suit);
+        else if (d.shielded.length) popNumber(fx, parts.node, centre, `+${d.shielded.length}`, '#8FB8E0', suit);
+        else if (d.popped.length) popNumber(fx, parts.node, centre, 'blocked', '#8FB8E0', null);
+        return centre;
     }
 
     // ---- Speed, pause, end ------------------------------------------------------------
@@ -324,7 +444,15 @@ export class FightScreen extends GameScreen {
         if (tutorialStep() === 4) setTutorialStep(5);
         const f = this.fight!;
         const won = f.winner === 'player';
+        // Make sure the grids show the final state (in case projectiles landed out of order).
+        for (const side of ['player', 'enemy'] as SideId[]) {
+            const parts = this.grids[side];
+            if (parts?.node.isValid) paintHealth(parts, this.view![side]);
+        }
+        for (const v of this.cardBase.keys()) this.board?.viewFor(v)?.setSelected(false);
         Sound.play(won ? 'win' : 'lose');
+        if (won) { starBurst(this.fx!, this.node.worldPosition); Smoke.puff(this.node.worldPosition, 1); }
+        else Smoke.mood(true);
         if (!won) Sound.music(null);
         const kit = UiKit.get();
         const banner = makeSprite(this.node, 'EndBanner', kit.panelCream, 1080, 180, {}, true).node;
