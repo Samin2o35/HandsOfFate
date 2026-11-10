@@ -140,7 +140,7 @@ export function bestLineHand(line: readonly PlacedCard[]): Candidate | null {
         list.push(pc);
         byRank.set(pc.card.rank, list);
     }
-    const groups = [...byRank.values()]
+    const groups = Array.from(byRank.values())
         .filter((g) => g.length >= 2)
         .sort((a, b) => b.length - a.length || b[0].card.rank - a[0].card.rank);
 
@@ -204,7 +204,7 @@ function findRun(cards: readonly PlacedCard[]): { cards: PlacedCard[]; text: str
 export function decideSuit(scoring: readonly PlacedCard[]): Suit {
     const counts = new Map<Suit, number>();
     for (const pc of scoring) counts.set(pc.card.suit, (counts.get(pc.card.suit) ?? 0) + 1);
-    const most = Math.max(...counts.values());
+    const most = Math.max(...Array.from(counts.values()));
     const tied = SUITS.filter((s) => counts.get(s) === most);
     if (tied.length === 1) return tied[0];
     const contenders = scoring

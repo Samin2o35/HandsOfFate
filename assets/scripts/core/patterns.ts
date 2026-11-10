@@ -88,7 +88,7 @@ function placements(g: HealthGrid, pattern: HitPattern): number[][] {
         for (const cell of g.cells) {
             const idx = new Set(rowCells(g, cell.row));
             for (let r = 0; r < g.rows; r++) { const i = cellIndexAt(g, r, cell.col); if (i >= 0) idx.add(i); }
-            out.push([...idx].sort((a, b) => a - b));
+            out.push(Array.from(idx).sort((a, b) => a - b));
         }
         return out;
     }

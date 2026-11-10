@@ -299,7 +299,7 @@ export class Fight {
         return {
             time: this.time, side: h.side, target: targetSide.id, kind: 'hand', hand: h.hand,
             sourceId: h.hand.id, effect: h.hand.effect, label: h.hand.label,
-            area: [...new Set(area)], cells: changed, chargesLeft: h.charges,
+            area: Array.from(new Set(area)), cells: changed, chargesLeft: h.charges,
         };
     }
 

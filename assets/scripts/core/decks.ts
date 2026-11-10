@@ -83,10 +83,10 @@ export function deckProblems(parts: DeckParts): string[] {
     // Too strong: trips, a straight flush anywhere, a run the spare extends to 4.
     const rankCount = new Map<number, number>();
     for (const c of all) rankCount.set(c.rank, (rankCount.get(c.rank) ?? 0) + 1);
-    if ([...rankCount.values()].some((n) => n >= 3)) problems.push('can make three of a kind');
+    if (Array.from(rankCount.values()).some((n) => n >= 3)) problems.push('can make three of a kind');
     for (const s of SUITS) {
         const ranks = new Set<number>(all.filter((c) => c.suit === s).map((c) => c.rank));
-        if ([...ranks].some((r) => ranks.has(r + 1) && ranks.has(r + 2))) problems.push('can make a straight flush');
+        if (Array.from(ranks).some((r) => ranks.has(r + 1) && ranks.has(r + 2))) problems.push('can make a straight flush');
     }
     if (parts.spare.rank === runRanks[0] - 1 || parts.spare.rank === runRanks[2] + 1) problems.push('spare extends the run to 4');
 

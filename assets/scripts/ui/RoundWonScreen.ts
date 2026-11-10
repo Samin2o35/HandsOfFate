@@ -179,8 +179,12 @@ export class RoundWonScreen extends GameScreen {
             if (selected) makeSprite(cardNode, 'Picked', kit.cardFrameGold, w + 12, h + 12, { y: 3 }, true);
             makeLabel(cardNode, 'Badge', spec.badge, { size: FONT.label + 6, color: COLOR.ink, align: 'left', x: -w / 2 + 24, y: h / 2 - 30 });
 
+            // With + Row / + Col buttons at the bottom, the Grid card moves up and uses a
+            // one-line description that ends above the buttons (they used to cover it).
+            const twoButtons = spec.kind === 'grid' && opt.available && (opt.directions ?? []).length === 2;
+
             // Icon
-            const iconY = h / 2 - 105;
+            const iconY = h / 2 - (twoButtons ? 92 : 105);
             if (spec.kind === 'health') makeSprite(cardNode, 'Icon', kit.frame('ui/icons/reward_health'), 65, 55, { y: iconY });
             else if (spec.kind === 'grid') makeSprite(cardNode, 'Icon', kit.frame('ui/icons/reward_grid'), 70, 55, { y: iconY });
             else [-1, 0, 1].forEach((k) => {
@@ -188,8 +192,9 @@ export class RoundWonScreen extends GameScreen {
                 back.node.angle = -k * 8;
             });
 
-            makeLabel(cardNode, 'Title', spec.title, { size: FONT.heading, color: spec.color, y: iconY - 72 });
-            makeLabel(cardNode, 'Text', opt.available ? spec.text : spec.full, { font: 'body', size: 24, color: '#3D3450', y: iconY - 120, width: w - 40, height: 60, anchorY: 1 });
+            makeLabel(cardNode, 'Title', spec.title, { size: FONT.heading, color: spec.color, y: iconY - (twoButtons ? 64 : 72) });
+            if (twoButtons) makeLabel(cardNode, 'Text', 'Add a row or a column', { font: 'body', size: 24, color: '#3D3450', y: iconY - 104, width: w - 40, height: 30 });
+            else makeLabel(cardNode, 'Text', opt.available ? spec.text : spec.full, { font: 'body', size: 24, color: '#3D3450', y: iconY - 120, width: w - 40, height: 60, anchorY: 1 });
 
             if (!opt.available) {
                 cardNode.addComponent(UIOpacity).opacity = 110; // shown, but dimmed and not clickable

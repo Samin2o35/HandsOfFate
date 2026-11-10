@@ -1,6 +1,6 @@
 {
-  "name": "HandsOfFate",
-  "uuid": "c8ee6098-644a-4ae8-b7c4-538f6364a44d",
+  "name": "hands-of-fate",
+  "uuid": "00000000-0000-0000-0000-000000000000",
   "creator": {
     "version": "3.8.6"
   },
@@ -8,11 +8,20 @@
     "test": "vitest run",
     "board": "tsx tools/board.ts",
     "fight": "tsx tools/fight.ts",
-    "sim": "tsx tools/sim.ts"
+    "sim": "tsx tools/sim.ts",
+    "single-html": "node tools/single-html.mjs",
+    "serve": "node tools/serve.mjs",
+    "serve-single": "node tools/serve.mjs build/single",
+    "itch-zip": "node tools/itch-zip.mjs",
+    "itch-art": "python tools/art/make_itch_art.py"
   },
   "devDependencies": {
+    "@babel/core": "^7.29.13",
+    "@babel/preset-env": "^7.29.7",
+    "@babel/preset-typescript": "^7.29.7",
     "@types/node": "^26.6.6",
     "tsx": "^4.23.15",
-    "vitest": "^5.1.0"
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
   }
 }
