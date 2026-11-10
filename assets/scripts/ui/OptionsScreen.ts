@@ -31,40 +31,46 @@ export class OptionsScreen extends GameScreen {
         if (!this.node.isValid) return;
         this.node.getComponent(Widget)?.updateAlignment();
         const ut = this.node.getComponent(UITransform)!;
-        const W = Math.min(ut.width, 1080), H = ut.height;
+        // Tall screens (4:3 tablets): keep the content in a centred band, not stretched to the edges.
+        const W = Math.min(ut.width, 1920), H = Math.min(ut.height, 1200);
         if (!this.content) this.content = makeNode(this.node, 'Content', W, H);
         clearChildren(this.content);
         const root = this.content;
         const T = H / 2, B = -H / 2;
-        const innerW = W - 60;
+        // Landscape: two columns of settings under the title plaque.
+        const colW = 780, colGap = 120;
+        const leftX = -(colW + colGap) / 2, rightX = (colW + colGap) / 2;
+        const gap = 18;
 
         const plaque = makeSprite(root, 'Plaque', kit.panelCream, 420, 120, { y: T - 40 - 60 }, true).node;
         makeLabel(plaque, 'Title', 'OPTIONS', { size: FONT.heading + 9, spacing: 3, color: COLOR.ink, y: 5 });
 
-        // Speed
-        let y = T - 260;
-        makeLabel(root, 'SpeedTitle', 'FIGHT SPEED', { size: FONT.label, spacing: 2, color: COLOR.lilac, align: 'left', x: -innerW / 2, y });
+        const sectionTitle = (name: string, text: string, cx: number, y: number) =>
+            makeLabel(root, name, text, { size: FONT.label, spacing: 2, color: COLOR.lilac, align: 'left', x: cx - colW / 2, y });
+
+        // Left column: fight speed, then sound.
+        let y = T - 240;
+        sectionTitle('SpeedTitle', 'FIGHT SPEED', leftX, y);
         y -= 70;
-        const gap = 18, bw = (innerW - gap * 2) / 3;
+        const bw = (colW - gap * 2) / 3;
         SPEEDS.forEach((speed, i) => {
             const on = Game.settings.speed === speed;
-            makeButton(root, `Speed ${speed}`, on ? ButtonStyle.Cream : ButtonStyle.Dark, SPEED_NAME[speed], bw, 100, { x: -innerW / 2 + bw / 2 + i * (bw + gap), y }, () => {
+            makeButton(root, `Speed ${speed}`, on ? ButtonStyle.Cream : ButtonStyle.Dark, SPEED_NAME[speed], bw, 100, { x: leftX - colW / 2 + bw / 2 + i * (bw + gap), y }, () => {
                 Game.settings.speed = speed;
                 Game.saveSettings();
                 this.build();
             });
         });
         y -= 70;
-        makeLabel(root, 'SpeedNote', 'Speed never changes your score: par time counts game-seconds.', { font: 'body', size: 26, color: COLOR.dim, align: 'left', x: -innerW / 2, y });
+        makeLabel(root, 'SpeedNote', 'Speed never changes your score: par time counts game-seconds.', { font: 'body', size: 26, color: COLOR.dim, align: 'left', x: leftX - colW / 2, y });
 
-        // Sound: two toggles side by side (cream = on).
         y -= 110;
-        makeLabel(root, 'SoundTitle', 'SOUND', { size: FONT.label, spacing: 2, color: COLOR.lilac, align: 'left', x: -innerW / 2, y });
+        sectionTitle('SoundTitle', 'SOUND', leftX, y);
         y -= 70;
-        const hw = (innerW - gap) / 2;
+        const hw = (colW - gap) / 2;
         const toggle = (key: 'music' | 'sfx', name: string, i: number) => {
             const on = Game.settings[key];
-            makeButton(root, `Toggle ${key}`, on ? ButtonStyle.Cream : ButtonStyle.Dark, `${name}: ${on ? 'On' : 'Off'}`, hw, 100, { x: -innerW / 2 + hw / 2 + i * (hw + gap), y }, () => {
+            makeButton(root, `Toggle ${key}`, on ? ButtonStyle.Cream : ButtonStyle.Dark, `${name}: ${on ? 'On' : 'Off'}`, hw, 100, { x: leftX - colW / 2 + hw / 2 + i * (hw + gap), y }, () => {
                 Game.settings[key] = !Game.settings[key];
                 Game.saveSettings();
                 Sound.settingsChanged();
@@ -74,27 +80,25 @@ export class OptionsScreen extends GameScreen {
         toggle('music', 'Music', 0);
         toggle('sfx', 'Effects', 1);
 
-        // Tutorial
-        y -= 150;
-        makeLabel(root, 'TutTitle', 'TUTORIAL', { size: FONT.label, spacing: 2, color: COLOR.lilac, align: 'left', x: -innerW / 2, y });
+        // Right column: tutorial, then progress.
+        y = T - 240;
+        sectionTitle('TutTitle', 'TUTORIAL', rightX, y);
         y -= 70;
-        makeButton(root, 'Replay', ButtonStyle.Cream, 'Replay the tutorial', innerW, 100, { y }, () => this.replayTutorial());
+        makeButton(root, 'Replay', ButtonStyle.Cream, 'Replay the tutorial', colW, 100, { x: rightX, y }, () => this.replayTutorial());
 
-        // Progress
-        y -= 150;
-        makeLabel(root, 'ResetTitle', 'PROGRESS', { size: FONT.label, spacing: 2, color: COLOR.lilac, align: 'left', x: -innerW / 2, y });
+        y -= 180;
+        sectionTitle('ResetTitle', 'PROGRESS', rightX, y);
         y -= 70;
-        makeButton(root, 'Reset', ButtonStyle.Red, 'Reset all progress', innerW, 100, { y }, () => {
+        makeButton(root, 'Reset', ButtonStyle.Red, 'Reset all progress', colW, 100, { x: rightX, y }, () => {
             confirmBox(this.node, 'RESET EVERYTHING?', 'Best run, Ace progress and your saved run will be deleted. This can\'t be undone.', 'Reset', 'Keep', () => {
                 Game.resetProgress();
                 this.build();
             });
         });
 
-        // Credits
-        makeLabel(root, 'Credits', 'Card art: Pixel Plebes by Greebles (Devlyn JD) · Fonts: Pixelify Sans, VT323 (OFL)', { font: 'body', size: 24, color: COLOR.dim, y: B + 190, width: innerW, height: 60 });
-
-        makeButton(root, 'Back', ButtonStyle.Dark, 'Back', innerW, 100, { y: B + 40 + 50 }, () => this.goBack());
+        // Credits and Back along the bottom.
+        makeLabel(root, 'Credits', 'Card art: Pixel Plebes by Greebles (Devlyn JD) · Fonts: Pixelify Sans, VT323 (OFL)', { font: 'body', size: 24, color: COLOR.dim, y: B + 170, width: colW * 2 + colGap, height: 40 });
+        makeButton(root, 'Back', ButtonStyle.Dark, 'Back', 600, 100, { y: B + 40 + 50 }, () => this.goBack());
     }
 
     private replayTutorial() {

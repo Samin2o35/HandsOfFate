@@ -28,13 +28,18 @@ export class RunOverScreen extends GameScreen {
     private content: Node | null = null;
 
     onShow(params?: unknown) {
-        const p = params as { run?: Run; result?: RoundResult } | undefined;
+        const p = params as { run?: Run; result?: RoundResult; preview?: boolean } | undefined;
         this.run = p?.run ?? Game.run;
         this.result = p?.result ?? this.run?.data.lastResult ?? null;
         if (!this.run) { ScreenManager.show('Title'); return; }
         Sound.music(null);
-        Game.endRun();
-        this.earned = Game.takePendingAces();
+        // hof.preview('RunOver') shows a sample run: don't record it or touch the profile.
+        if (!p?.preview) {
+            Game.endRun();
+            this.earned = Game.takePendingAces();
+        } else {
+            this.earned = [];
+        }
         UiKit.ready.then(() => this.scheduleOnce(() => {
             this.build();
             celebrateAces(this.node, this.earned);
@@ -47,26 +52,30 @@ export class RunOverScreen extends GameScreen {
         if (!this.node.isValid) return;
         this.node.getComponent(Widget)?.updateAlignment();
         const ut = this.node.getComponent(UITransform)!;
-        const W = Math.min(ut.width, 1080), H = ut.height;
+        // Tall screens (4:3 tablets): keep the content in a centred band, not stretched to the edges.
+        const W = Math.min(ut.width, 1920), H = Math.min(ut.height, 1200);
         if (!this.content) this.content = makeNode(this.node, 'Content', W, H);
         clearChildren(this.content);
         const root = this.content;
-        const L = -W / 2 + MARGIN, R = W / 2 - MARGIN, T = H / 2, B = -H / 2;
-        const innerW = R - L;
+        const L0 = -W / 2 + MARGIN, R = W / 2 - MARGIN, T = H / 2, B = -H / 2;
 
-        // The art at 2× of its 240×360 1× file (crisp), dropping in.
-        const art = makeSprite(root, 'Fallen', kit.frame('concept/king_fallen_1x'), 480, 720, { y: T - 60 - 360 });
+        // Landscape: the fallen King on the left, the stats on the right.
+        const artW = 480;
+        const art = makeSprite(root, 'Fallen', kit.frame('concept/king_fallen_1x'), artW, 720, { x: L0 + 40 + artW / 2, y: 0 });
         art.node.setScale(1.08, 1.08, 1);
         tween(art.node).to(0.5, { scale: new Vec3(1, 1, 1) }, { easing: 'quadOut' }).start();
+        const L = L0 + 40 + artW + 80;
+        const innerW = R - L;
+        const cx = L + innerW / 2;
 
-        const plaqueTop = T - 835, plaqueH = 140;
-        const plaque = makeSprite(root, 'Plaque', kit.panelCream, innerW + 10, plaqueH + 10, { y: plaqueTop - (plaqueH + 10) / 2 }, true).node;
+        const plaqueTop = T - 40, plaqueH = 140;
+        const plaque = makeSprite(root, 'Plaque', kit.panelCream, innerW + 10, plaqueH + 10, { x: cx, y: plaqueTop - (plaqueH + 10) / 2 }, true).node;
         makeLabel(plaque, 'Title', 'THE KING HAS FALLEN', { size: FONT.title - 6, spacing: 3, color: '#D2453C', y: 20 });
         makeLabel(plaque, 'Sub', 'Your health grid is empty. The run is over.', { font: 'body', size: FONT.bodySmall, color: COLOR.ink, y: -32 });
 
         // Stats.
         const statsTop = plaqueTop - plaqueH - 30, statsH = 390;
-        const stats = makeSprite(root, 'Stats', kit.panelCream, innerW + 10, statsH + 10, { y: statsTop - (statsH + 10) / 2 }, true).node;
+        const stats = makeSprite(root, 'Stats', kit.panelCream, innerW + 10, statsH + 10, { x: cx, y: statsTop - (statsH + 10) / 2 }, true).node;
         const x0 = -(innerW + 10) / 2 + 40, x1 = (innerW + 10) / 2 - 40;
         const best = run.data.totals.bestHand;
         const rows: [string, string][] = [
@@ -86,7 +95,7 @@ export class RunOverScreen extends GameScreen {
         makeLabel(stats, 'BeatenBy', 'Beaten by', { font: 'body', size: FONT.bodySmall, color: '#3D3450', align: 'left', x: x0 + 90, y: avatarY + 18 });
         makeLabel(stats, 'Who', this.result?.opponent ?? o.name, { size: FONT.label + 6, color: COLOR.ink, align: 'left', x: x0 + 90, y: avatarY - 16 });
 
-        this.buildAce(root, L, innerW, statsTop - statsH - 30);
+        this.buildAce(root, L, innerW, statsTop - statsH - 34);
 
         const bw = (innerW - 18) / 2;
         makeButton(root, 'NewRun', ButtonStyle.Red, 'New Run', bw, 100, { x: L + bw / 2, y: B + 40 + 50 }, () => this.newRun());

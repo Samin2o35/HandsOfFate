@@ -85,6 +85,12 @@ export class BoardView {
         return this.views.find((v) => v.card?.id === cardId) ?? null;
     }
 
+    /** Moves the pink selection ring (no rebuild). */
+    setSelected(cardId: number | null) {
+        this.selectedId = cardId;
+        for (const v of this.views) if (v.isValid) v.setSelected(v.card?.id === cardId);
+    }
+
     /** A little bounce on one card (just dropped or just forged). */
     pop(cardId: number) {
         const v = this.viewFor(cardId);

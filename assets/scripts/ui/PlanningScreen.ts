@@ -50,6 +50,9 @@ export class PlanningScreen extends GameScreen {
     private forge: ForgeView | null = null;
     private healthNode: Node | null = null;
     private tutorial: Node | null = null;
+    /** The info box and where it goes, so a tap can rebuild just the box. */
+    private infoBox: Node | null = null;
+    private infoArgs: [Node, number, number, number, number] | null = null;
 
     onShow(params?: unknown) {
         const p = params as { run?: Run; message?: PlanningMessage } | undefined;
@@ -116,12 +119,13 @@ export class PlanningScreen extends GameScreen {
             stashLeft: L + 465, stashTop: youTop, stashWidth: innerW - 465, stashHeight: 165,
         }, {
             changed: (id) => this.changed(id),
-            selected: (card) => { this.selected = card; this.message = null; this.rebuild(); },
+            selected: (card) => { this.selected = card; this.message = null; this.refreshSelection(); },
         }, this.selected?.id ?? null);
 
         // Info box beside the column labels.
         const infoLeft = board.colLabelsRight + 30;
-        this.buildInfoBox(root, run, infoLeft, R, board.colLabelsTop, board.colLabelsHeight);
+        this.infoArgs = [root, infoLeft, R, board.colLabelsTop, board.colLabelsHeight];
+        this.infoBox = this.buildInfoBox(root, run, infoLeft, R, board.colLabelsTop, board.colLabelsHeight);
 
         this.buildYou(root, run, L, youTop);
 
@@ -147,10 +151,10 @@ export class PlanningScreen extends GameScreen {
         makeButton(root, 'Options', ButtonStyle.Dark, 'Options', 150, 87, { x: R - 75, y }, () => this.openOptions(), 27);
     }
 
-    private buildInfoBox(root: Node, run: Run, left: number, right: number, top: number, h: number) {
+    private buildInfoBox(root: Node, run: Run, left: number, right: number, top: number, h: number): Node | null {
         const kit = UiKit.get();
         const w = right - left;
-        if (w < 200) return;
+        if (w < 200) return null;
         const box = makeSprite(root, 'InfoBox', kit.panelCream, w, h + 10, { x: left + w / 2, y: top - (h + 10) / 2 }, true).node;
         const x0 = -w / 2 + 30;
         const titleY = h / 2 - 20;
@@ -160,13 +164,13 @@ export class PlanningScreen extends GameScreen {
         if (this.message) {
             makeLabel(box, 'Title', this.message.title, { size: FONT.label + 3, color: COLOR.ink, align: 'left', x: x0, y: titleY });
             makeLabel(box, 'Body', this.message.body, { font: 'body', size: bodySize, color: COLOR.ink, align: 'left', x: x0, y: bodyY, width: w - 60, height: h - 50, anchorY: 1 });
-            return;
+            return box;
         }
         const card = this.selected;
         if (!card) {
             makeLabel(box, 'Title', 'Tap a card to see its hands', { size: FONT.label + 3, color: COLOR.ink, align: 'left', x: x0, y: titleY });
             makeLabel(box, 'Body', 'Drag to move. Drop on a card to swap, or on the stash to bench it.', { font: 'body', size: bodySize, color: COLOR.ink, align: 'left', x: x0, y: bodyY, width: w - 60, height: h - 50, anchorY: 1 });
-            return;
+            return box;
         }
         const result = run.board();
         const hands = handsWithCard(result, card.id).filter((hd) => hd.source !== 'leftover');
@@ -189,6 +193,7 @@ export class PlanningScreen extends GameScreen {
             body = parts.length > 1 ? `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}.` : `${parts[0]}.`;
         }
         makeLabel(box, 'Body', body, { font: 'body', size: bodySize, color: COLOR.ink, align: 'left', x: x0, y: bodyY, width: w - 60, height: h - 50, anchorY: 1 });
+        return box;
     }
 
     private buildYou(root: Node, run: Run, L: number, top: number) {
@@ -201,6 +206,25 @@ export class PlanningScreen extends GameScreen {
     }
 
     // ---- Actions ----------------------------------------------------------------
+
+    /**
+     * A tap only changes the selection: the pink ring, the Forge's pair and the
+     * info box. Update just those instead of rebuilding the whole screen (a full
+     * rebuild is ~200 nodes, which a phone feels on every tap).
+     */
+    private refreshSelection() {
+        const run = this.run;
+        if (!run || !this.board || !this.infoArgs || !this.content?.isValid) { this.rebuild(); return; }
+        const id = this.selected?.id ?? null;
+        this.board.setSelected(id);
+        this.forge?.setSelected(id);
+        const old = this.infoBox;
+        const index = old?.isValid ? old.getSiblingIndex() : -1;
+        if (old?.isValid) { old.removeFromParent(); old.destroy(); }
+        const [root, left, right, top, h] = this.infoArgs;
+        this.infoBox = this.buildInfoBox(root, run, left, right, top, h);
+        if (this.infoBox && index >= 0) this.infoBox.setSiblingIndex(index);
+    }
 
     /** After any change: save, then rebuild. */
     private changed(movedId?: number) {

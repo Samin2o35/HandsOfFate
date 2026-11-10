@@ -13,7 +13,8 @@
     "serve": "node tools/serve.mjs",
     "serve-single": "node tools/serve.mjs build/single",
     "itch-zip": "node tools/itch-zip.mjs",
-    "itch-art": "python tools/art/make_itch_art.py"
+    "itch-art": "python tools/art/make_itch_art.py",
+    "layout": "node tools/layout/run-all.mjs"
   },
   "devDependencies": {
     "@babel/core": "^7.29.13",

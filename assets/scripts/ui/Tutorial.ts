@@ -72,13 +72,17 @@ export interface TutorialView {
 }
 
 /** Builds the overlay on `host` (a full-screen screen node). Destroy the returned node to remove it. */
+/** The tutorial step whose Dealer panel last played its sound. */
+let lastSoundStep = 0;
+
 export function showTutorial(host: Node, v: TutorialView): Node {
     const kit = UiKit.get();
     const hostUt = host.getComponent(UITransform)!;
     const W = hostUt.width, H = hostUt.height;
     const cw = Math.min(W, 1080);
     const overlay = makeNode(host, 'Tutorial', W, H);
-    Sound.play('dealer');
+    // The panel is rebuilt whenever its screen rebuilds; the sound is for a new step only.
+    if (v.step !== lastSoundStep) { lastSoundStep = v.step; Sound.play('dealer'); }
     const dimColor = new Color(10, 8, 16, 165);
 
     // Dim everything except an ellipse around the spot (an inverted ellipse mask).

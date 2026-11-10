@@ -30,6 +30,14 @@ export class ForgeView {
         this.build();
     }
 
+    /** The selected card changed: show its pair (rebuilds only the Forge). */
+    setSelected(cardId: number | null) {
+        if (cardId === this.selectedId) return;
+        this.selectedId = cardId;
+        this.picking = false;
+        this.build();
+    }
+
     private pair(): [Card, Card] | null {
         const pairs = mergeablePairs(this.run.ownedCards());
         return pairs.find(([a, b]) => a.id === this.selectedId || b.id === this.selectedId) ?? pairs[0] ?? null;

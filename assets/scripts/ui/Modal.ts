@@ -46,9 +46,10 @@ export function celebrateAce(host: Node, id: AceId, onClose?: () => void): Node 
     const layer = dimLayer(host, 'AceEarned', 215);
     Sound.play('ace');
 
-    makeLabel(layer, 'Banner', 'ACE EARNED', { size: FONT.title, spacing: 5, color: COLOR.gold, y: 560 });
+    // Landscape: banner on top, the card on the left, its name and the button on the right.
+    makeLabel(layer, 'Banner', 'ACE EARNED', { size: FONT.title, spacing: 5, color: COLOR.gold, y: 380 });
     // The card at 2× with a gold ring and a pulsing glow behind it.
-    const holder = makeNode(layer, 'Card', 200, 280, { y: 220 });
+    const holder = makeNode(layer, 'Card', 200, 280, { x: -420, y: -10 });
     const glow = makeSprite(holder, 'Glow', kit.ringWhite, 250, 330, {}, true);
     glow.color = new Color().fromHEX(COLOR.gold);
     tween(glow.node).repeatForever(tween(glow.node).to(0.6, { scale: new Vec3(1.06, 1.06, 1) }).to(0.6, { scale: new Vec3(1, 1, 1) })).start();
@@ -59,12 +60,12 @@ export function celebrateAce(host: Node, id: AceId, onClose?: () => void): Node 
         for (let i = 0; i < 4; i++) sparks(layer, holder.worldPosition, i % 2 ? FX_COLOR.hit : COLOR.cream, 8);
     }).start();
 
-    const title = makeSprite(layer, 'Plaque', kit.panelCream, 760, 200, { y: -60 }, true).node;
+    const title = makeSprite(layer, 'Plaque', kit.panelCream, 760, 200, { x: 180, y: 50 }, true).node;
     makeSprite(title, 'Suit', kit.suitIcon(ace.suit), 36, 36, { x: -150, y: 40 });
     makeLabel(title, 'Name', ace.name.toUpperCase(), { size: FONT.title - 12, spacing: 3, color: COLOR.ink, x: 20, y: 40 });
     makeLabel(title, 'Goal', `${ace.goal}.`, { font: 'body', size: FONT.bodySmall + 3, color: COLOR.ink, y: -30, width: 680, height: 70 });
 
-    makeButton(layer, 'Close', ButtonStyle.Red, 'Brilliant', 500, 100, { y: -300 }, () => {
+    makeButton(layer, 'Close', ButtonStyle.Red, 'Brilliant', 500, 100, { x: 180, y: -160 }, () => {
         if (layer.isValid) layer.destroy();
         onClose?.();
     });
