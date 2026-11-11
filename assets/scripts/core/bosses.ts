@@ -36,9 +36,9 @@ export const fortressArmorCharges = (tier: number) => tier;
 /** One sentence for the boss intro screen, for this tier. */
 export function twistText(suit: Suit, tier: number): string {
     switch (suit) {
-        case 'S': return `Every ${executionPeriod()} s a blade hits your fullest health row, destroying ${executionCells(tier)} cells.`;
+        case 'S': return `Every ${executionPeriod()}s a blade hits your fullest health row, destroying ${executionCells(tier)} cells.`;
         case 'H': return `The first time he drops below half health, he heals ${secondWindHeal(tier)} cells. Once per fight.`;
-        case 'C': return `Rotted cells on your grid spread to a neighbour every ${blightPeriod(tier)} s.`;
+        case 'C': return `Rotted cells on your grid spread to a neighbour every ${blightPeriod(tier)}s.`;
         case 'D': return `Starts with ${fortressShields(tier)} cells shielded and +${fortressArmorCharges(tier)} armor charges.`;
     }
 }
@@ -51,8 +51,8 @@ export function twistChange(suit: Suit, tier: number): string | null {
         case 'S': return `Blades destroy ${executionCells(tier)} cells (was ${executionCells(t)}).`;
         case 'H': return `Heals ${secondWindHeal(tier)} cells (was ${secondWindHeal(t)}).`;
         case 'C': return blightPeriod(tier) === blightPeriod(t)
-            ? `Spreads every ${blightPeriod(tier)} s (already at its fastest).`
-            : `Spreads every ${blightPeriod(tier)} s (was ${blightPeriod(t)} s).`;
+            ? `Spreads every ${blightPeriod(tier)}s (already at its fastest).`
+            : `Spreads every ${blightPeriod(tier)}s (was ${blightPeriod(t)}s).`;
         case 'D': return `${fortressShields(tier)} cells shielded (was ${fortressShields(t)}), +${fortressArmorCharges(tier)} armor charges (was +${fortressArmorCharges(t)}).`;
     }
 }

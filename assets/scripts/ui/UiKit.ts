@@ -12,7 +12,7 @@ import {
     Button, resources, Vec3, HorizontalTextAlignment, VerticalTextAlignment,
 } from 'cc';
 import { Sound } from '../app/Sound';
-import { Card, RANKS, SUITS, Suit, updatedArtPath, classicArtPath, CARD_BACK_PATH } from '../core/cards';
+import { Card, RANKS, SUITS, Suit, updatedArtPath, classicArtPath, CARD_BACK_PATH, DEALER_CARD_PATH } from '../core/cards';
 import { UiButton, ButtonStyle } from './UiButton';
 const { ccclass, property } = _decorator;
 
@@ -21,8 +21,8 @@ export const FONT = {
     title: 66,        // plaque titles
     heading: 33,      // "Jack of Clubs' table", round number
     button: 36,
-    label: 21,        // small caps labels: "THREE OF A KIND", "STASH"
-    labelSmall: 18,   // column labels
+    label: 24,        // small caps labels: "THREE OF A KIND", "STASH" (was 21; decision 138)
+    labelSmall: 22,   // captions, column labels (was 18; decision 138)
     body: 32,         // VT323 body text
     bodySmall: 27,
 };
@@ -73,8 +73,11 @@ export class UiKit extends Component {
         if (UiKit.instance === this) UiKit.instance = null;
     }
 
+    /** Every resources path that frame() can return; anything else is null (decision 133). */
+    static readonly PRELOAD_EXTRA: readonly string[] = [CARD_BACK_PATH, DEALER_CARD_PATH, 'concept/king_roughout', 'concept/king_fallen_1x', 'ui/icons/reward_health', 'ui/icons/reward_grid'];
+
     private preload(): Promise<void> {
-        const paths: string[] = [CARD_BACK_PATH, 'concept/king_roughout', 'concept/king_fallen_1x', 'ui/icons/reward_health', 'ui/icons/reward_grid'];
+        const paths: string[] = UiKit.PRELOAD_EXTRA.slice();
         for (const suit of SUITS) {
             paths.push(`ui/icons/suit_${suit}`);
             paths.push(`ui/icons/suit_${suit}_spent`);
@@ -93,7 +96,12 @@ export class UiKit extends Component {
     }
 
     /** A preloaded frame by resources path ("cards/updated/S_13"), or null. */
-    frame(path: string): SpriteFrame | null { return this.frames.get(path) ?? null; }
+    frame(path: string): SpriteFrame | null {
+        const f = this.frames.get(path) ?? null;
+        if (!f && !this.warned.has(path)) { this.warned.add(path); console.warn(`UiKit.frame: "${path}" is not preloaded (add it to UiKit.PRELOAD_EXTRA)`); }
+        return f;
+    }
+    private warned = new Set<string>();
     cardFrame(card: Pick<Card, 'suit' | 'rank'>): SpriteFrame | null { return this.frame(updatedArtPath(card)); }
     classicFrame(card: Pick<Card, 'suit' | 'rank'>): SpriteFrame | null { return this.frame(classicArtPath(card)); }
     suitIcon(suit: Suit): SpriteFrame | null { return this.frame(`ui/icons/suit_${suit}`); }

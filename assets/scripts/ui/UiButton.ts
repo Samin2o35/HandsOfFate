@@ -16,7 +16,7 @@ import {
     _decorator, Component, Sprite, SpriteFrame, Button, Label, Color, Enum, Node, EventTouch,
 } from 'cc';
 import { Sound } from '../app/Sound';
-import { EDITOR } from 'cc/env';
+import { EDITOR_NOT_IN_PREVIEW } from 'cc/env';
 import { buttonFrame } from './kitC';
 import { ButtonLook } from './pixelart';
 const { ccclass, property, executeInEditMode, requireComponent } = _decorator;
@@ -103,8 +103,14 @@ export class UiButton extends Component {
     applyStyle() {
         const sprite = this.getComponent(Sprite);
         const button = this.getComponent(Button);
-        // In the editor, leave the prefab's own frames alone: runtime frames must never be saved into a prefab.
-        if (EDITOR) return;
+        // In the real editor (not its preview), leave the prefab's own frames alone: runtime frames
+        // must never be saved into a prefab. The text is plain prefab data, so it is set there too.
+        // EDITOR is also true in the editor's preview, so it can't be used here (decision 132).
+        if (EDITOR_NOT_IN_PREVIEW) {
+            const l = this.labelComp;
+            if (l && l.string !== this._text) l.string = this._text;
+            return;
+        }
         const look = LOOK[this._style] ?? 'outline';
         const normal = buttonFrame(look);
         const pressed = buttonFrame(look, true);

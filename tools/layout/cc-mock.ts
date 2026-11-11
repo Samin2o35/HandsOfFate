@@ -137,10 +137,17 @@ export class RichText extends Component {
         this._s = v;
         const ut = this.node?.getComponent<UITransform>(UITransform);
         if (!ut) return;
-        const plain = v.replace(/<[^>]+>/g, '');
-        const w = this.maxWidth || plain.length * this.fontSize * 0.5;
-        ut.width = w;
-        ut.height = Math.max(1, Math.ceil(plain.length * this.fontSize * 0.5 / Math.max(1, w))) * (this.lineHeight || this.fontSize);
+        const lines = v.replace(/<[^>]+>/g, '').split('\n');
+        const lh = this.lineHeight || this.fontSize;
+        if (this.maxWidth) {
+            const w = this.maxWidth;
+            ut.width = w;
+            ut.height = lines.reduce((n, l) => n + Math.max(1, Math.ceil(l.length * this.fontSize * 0.5 / Math.max(1, w))), 0) * lh;
+        } else {
+            // No wrapping: explicit lines (VT323 is 0.4 em per glyph).
+            ut.width = Math.max(...lines.map((l) => l.length)) * this.fontSize * 0.4;
+            ut.height = lines.length * lh;
+        }
     }
 }
 export class Widget extends Component {
@@ -200,7 +207,24 @@ export const screen = { windowSize: new Size(1920, 1080), on() {}, off() {} };
 export const view = { setDesignResolutionSize() {}, getVisibleSize: () => new Size(1920, 1080), on() {}, off() {} };
 export const ResolutionPolicy = { FIXED_WIDTH: 0, FIXED_HEIGHT: 1, SHOW_ALL: 2 };
 export const dynamicAtlasManager = { enabled: false };
-export const resources = { load(p: string, _t: any, cb: any) { cb?.(null, new SpriteFrame(p)); }, loadDir(_p: string, _t: any, cb: any) { cb?.(null, []); } };
+/** Paths asked of resources.load that have no file under assets/resources (render.ts fails on any). */
+export const missingResources = new Set<string>();
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const nodeFs = require('fs') as typeof import('fs');
+/** Like Cocos: a path without its extension; "…/spriteFrame" and "…/texture" name the image's sub-assets. */
+function resourceExists(p: string): boolean {
+    const base = p.replace(/\/(spriteFrame|texture)$/, '');
+    const dir = 'assets/resources/' + base.split('/').slice(0, -1).join('/');
+    const name = base.split('/').pop()!;
+    try { return nodeFs.readdirSync(dir).some((f) => !f.endsWith('.meta') && f.replace(/\.[^.]+$/, '') === name); } catch { return false; }
+}
+export const resources = {
+    load(p: string, _t: any, cb: any) {
+        if (!resourceExists(p)) { missingResources.add(p); cb?.(new Error(`no file for ${p}`), null); return; }
+        cb?.(null, new SpriteFrame(p));
+    },
+    loadDir(_p: string, _t: any, cb: any) { cb?.(null, []); },
+};
 export const input = { on() {}, off() {}, once() {} };
 export const Input = { EventType: { TOUCH_START: 'touch-start', TOUCH_END: 'touch-end', MOUSE_DOWN: 'mouse-down' } };
 

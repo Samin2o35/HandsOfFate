@@ -12,11 +12,11 @@
 //   Quit         only shown on Android builds (iOS and web apps don't quit)
 
 import { _decorator, Label, game, sys, Button, Sprite, UITransform, Color, HorizontalTextAlignment } from 'cc';
-import { EDITOR } from 'cc/env';
+import { EDITOR_NOT_IN_PREVIEW } from 'cc/env';
 import { Sound } from '../app/Sound';
 import { GameScreen } from './GameScreen';
 import { UiButton, ButtonStyle } from './UiButton';
-import { Game, SPEED_NAME } from '../app/Game';
+import { Game } from '../app/Game';
 import { ScreenManager } from '../app/ScreenManager';
 import { confirmBox } from './Modal';
 import { UiKit, makeLabel, FONT } from './UiKit';
@@ -58,7 +58,7 @@ export class TitleScreen extends GameScreen {
             if (b) b.style = ButtonStyle.Dark;
         }
         if (this.quitButton) this.quitButton.node.active = sys.isNative && sys.os === sys.OS.ANDROID;
-        if (!EDITOR) UiKit.ready.then(() => { if (this.node.isValid) this.dress(); });
+        if (!EDITOR_NOT_IN_PREVIEW) UiKit.ready.then(() => { if (this.node.isValid) this.dress(); });
         this.refresh();
     }
 
@@ -90,6 +90,16 @@ export class TitleScreen extends GameScreen {
                 if (anim && anim.strip !== strip) anim.load(strip);
             });
         }
+        // Buttons in the signed-off order and words (mockup 01): Continue, New Run, How to play, Aces, Options, Quit.
+        const order: [UiButton | null, string][] = [
+            [this.continueButton, ''], [this.newRunButton, 'New Run'], [this.howToPlayButton, 'How to play'],
+            [this.achievementsButton, 'Aces'], [this.optionsButton, 'Options'], [this.quitButton, 'Quit'],
+        ];
+        order.forEach(([b, text], k) => {
+            if (!b) return;
+            if (text) b.text = text;
+            if (b.node.parent?.name === 'Buttons') b.node.setSiblingIndex(k);
+        });
         const plaque = content.getChildByName('Plaque');
         if (plaque) plaque.active = false;
         makeLabel(content, 'Logo', 'HANDS OF FATE', { size: 88, spacing: 4, color: INK_TEXT.main, x: -480, y: -45 });
@@ -130,7 +140,7 @@ export class TitleScreen extends GameScreen {
             this.continueButton.text = run ? `Continue · Round ${run.round}` : 'Continue';
             this.continueButton.interactable = !!run;
         }
-        if (this.optionsButton) this.optionsButton.text = `Options · Speed: ${SPEED_NAME[Game.settings.speed]}`;
+        if (this.optionsButton) this.optionsButton.text = 'Options';
         const p = Game.profile;
         if (this.dressed) {
             // One line in the open table: "ROUND 23 · 84,210".

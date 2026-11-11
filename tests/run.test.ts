@@ -185,8 +185,8 @@ describe('bosses', () => {
     });
 
     it('intro text matches the boss mockup (Blight, second meeting)', () => {
-        expect(twistText('C', 2)).toBe('Rotted cells on your grid spread to a neighbour every 10 s.');
-        expect(twistChange('C', 2)).toBe('Spreads every 10 s (was 11 s).');
+        expect(twistText('C', 2)).toBe('Rotted cells on your grid spread to a neighbour every 10s.');
+        expect(twistChange('C', 2)).toBe('Spreads every 10s (was 11s).');
         expect(twistChange('C', 1)).toBeNull();
     });
 });

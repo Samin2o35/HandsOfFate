@@ -18,7 +18,7 @@ const py = process.platform === 'win32' ? 'python' : 'python3';
 for (const [w, h] of sizes) for (const [screen, ...args] of jobs) {
     const f = join(out, `${screen}${args.join('')}-${w}x${h}`);
     const log = execFileSync('npx', ['tsx', '--tsconfig', 'tools/layout/tsconfig.json', 'tools/layout/render.ts', screen, String(w), String(h), `${f}.json`, ...args],
-        { encoding: 'utf8', shell: process.platform === 'win32', stdio: ['ignore', 'pipe', 'ignore'] });
+        { encoding: 'utf8', shell: process.platform === 'win32', stdio: ['ignore', 'pipe', 'inherit'] });
     process.stdout.write(log.trim().split('\n').pop() + '\n');
     process.stdout.write(execFileSync(py, ['tools/layout/draw.py', `${f}.json`, `${f}.png`], { encoding: 'utf8' }));
 }

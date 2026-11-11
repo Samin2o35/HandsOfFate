@@ -21,9 +21,15 @@ async function main() {
     const kit = canvas.addComponent<UiKit>(UiKit);
     (kit as any).headingFont = { kind: 'heading' }; (kit as any).bodyFont = { kind: 'body' };
     kit.onLoad();
-    // Every art path resolves to a named stand-in frame, so pictures can tell cards apart.
-    (kit as any).frame = (path: string) => new SpriteFrame(path);
     await UiKit.ready;
+    // Every preloaded art path resolves to a named stand-in frame, so pictures can tell cards apart.
+    // A path that isn't preloaded is null in the game too (UiKit.frame), so it fails the run (decision 133).
+    const loaded: Map<string, unknown> = (kit as any).frames;
+    const notLoaded = new Set<string>();
+    (kit as any).frame = (path: string) => {
+        if (!loaded.has(path)) { notLoaded.add(path); return null; }
+        return new SpriteFrame(path);
+    };
     const host = new Node(screen); canvas.addChild(host);
     const hut = host.addComponent<UITransform>(UITransform); hut.width = W; hut.height = H;
 
@@ -214,5 +220,10 @@ async function main() {
     const fs = await import('fs');
     fs.writeFileSync(out, JSON.stringify({ W, H, screen, boxes, frames }));
     console.log(`${screen} ${sw}x${sh} -> design ${W}x${H}, ${boxes.length} boxes`);
+    // Sprite paths that would show nothing in Cocos: no file under assets/resources, or never preloaded.
+    const { missingResources } = await import('cc') as any;
+    const bad = [...missingResources].map((p: string) => `no file under assets/resources: ${p}`)
+        .concat([...notLoaded].map((p) => `not preloaded by UiKit (kit.frame returns null): ${p}`));
+    if (bad.length) { console.error(`MISSING ART in ${screen}:\n  ` + bad.join('\n  ')); process.exit(2); }
 }
 main().catch((e) => { console.error(e); process.exit(1); });

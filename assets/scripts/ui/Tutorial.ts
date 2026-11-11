@@ -16,24 +16,15 @@ import { Game } from '../app/Game';
 import { UiKit, makeNode, makeSprite, makeLabel, makeButton, FONT, COLOR } from './UiKit';
 import { ButtonStyle } from './UiButton';
 import { AnimatedCard } from './AnimatedCard';
+import { DEALER_CARD_PATH } from '../core/cards';
+import { wrapRich, monoColumns } from './richwrap';
+import { STEP_TEXT, DEALER_WORD as C } from './tutorialText';
 import { frame } from './kitC';
 
 export const TUTORIAL_STEPS = 6;
 
-/** Colours for words in the Dealer's lines: the deck's own colours, the lighter tone where the deck has one. */
-const C = {
-    gold: '#FDD164', hearts: '#D47564', diamonds: '#94D2D4', spades: '#8E478C', clubs: '#309C63', red: '#C93038',
-};
-const w = (text: string, color: string) => `<color=${color}>${text}</color>`;
-
-export const STEP_TEXT: Record<number, string> = {
-    1: `Welcome, I'm the Dealer. This grid is your ${w('health', C.gold)}: lose every cell and the run is over.`,
-    2: `Every ${w('full', C.gold)} row and column is a poker hand. Row 3 isn't full yet.\nDrag the ${w('10 of Clubs', C.clubs)} in to finish it.`,
-    3: `Suits decide what a hand does. Mixed suits? The ${w("highest card's suit", C.gold)} wins, so your ${w('Jack of Spades', C.spades)} makes the straight attack.`,
-    4: `${w('Hearts', C.hearts)} and ${w('diamonds', C.diamonds)} run out: 3 uses a fight. Watch the pips.\n${w('Spades', C.spades)} and ${w('clubs', C.clubs)} never stop, and ${w('rotted', C.clubs)} cells can't be healed.`,
-    5: `Round won! Always take ${w('one of their cards', C.gold)}, then pick ${w('Health', C.red)}, ${w('Grid', C.gold)} or ${w('Cards', C.diamonds)}.`,
-    6: `Round 2. Two ${w('3 of Diamonds', C.diamonds)}? Merge them in the ${w('Forge', C.gold)}: one card, plus an upgrade of your choice.`,
-};
+// The Dealer's lines and their word colours live in ui/tutorialText.ts (plain TS, tested).
+export { STEP_TEXT } from './tutorialText';
 
 // ---- State ---------------------------------------------------------------------
 
@@ -136,9 +127,10 @@ export function showTutorial(host: Node, v: TutorialView): Node {
     if (kit.bodyFont) { rt.useSystemFont = false; rt.font = kit.bodyFont; }
     rt.fontSize = FONT.body;
     rt.lineHeight = 38;
-    rt.maxWidth = textW;
+    // Wrapped here, not by Cocos: its wrapping drops the space before a coloured word (ui/richwrap.ts).
+    rt.maxWidth = 0;
     rt.fontColor = new Color().fromHEX(COLOR.cream);
-    rt.string = STEP_TEXT[v.step] ?? '';
+    rt.string = wrapRich(STEP_TEXT[v.step] ?? '', monoColumns(textW, FONT.body));
     const textH = Math.max(38, textNode.getComponent(UITransform)!.height);
 
     // Stack from the panel top (y = 0 here), then centre everything at the end.
@@ -161,7 +153,7 @@ export function showTutorial(host: Node, v: TutorialView): Node {
     panel.getComponent(UITransform)!.setContentSize(panelW, panelH);
     // The one filled box of the open table: room dark inside a cream rail, so his words read over the dim.
     frame(panel, 'Back', panelW, panelH, {}, { closed: true, fill: 'room0', caption: 'THE DEALER' }).setSiblingIndex(0);
-    const joker = makeSprite(panel, 'Joker', kit.frame('cards/updated/joker_true'), 120, 168, { x: -panelW / 2 + 90, y: panelH / 2 - pad - 84 });
+    const joker = makeSprite(panel, 'Joker', kit.frame(DEALER_CARD_PATH), 120, 168, { x: -panelW / 2 + 90, y: panelH / 2 - pad - 84 });
     const anim = joker.node.addComponent(AnimatedCard);
     anim.strip = 'anim/joker_true';
 

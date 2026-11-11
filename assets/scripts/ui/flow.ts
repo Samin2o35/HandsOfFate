@@ -40,7 +40,7 @@ export function finishRound(run: Run, fight: Fight): RoundResult {
     console.log(`Auto reward until stage 8: took the ${cardWords(took)}; new cards: ${gained.map(cardWords).join(', ')}`);
     const message: PlanningMessage = {
         title: `Round ${result.round} won · +${s.total.toLocaleString('en-US')}`,
-        body: `Took the ${cardWords(took)} and 3 new cards (see the stash). ${s.cellsLeft}/${s.cellsTotal} cells left.`,
+        body: `Took the ${cardWords(took)} and 3 new cards (see the stash). ${s.cellsLeft} / ${s.cellsTotal} cells left.`,
     };
     ScreenManager.show('Planning', { run, message });
     return result;

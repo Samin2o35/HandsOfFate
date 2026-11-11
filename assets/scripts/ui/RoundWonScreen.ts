@@ -95,14 +95,14 @@ export class RoundWonScreen extends GameScreen {
         const rows: [string, string, string][] = [
             ['Hands fired', `${s.handsFired} hands`, `+${s.handBonus}`],
             ['Health left', `${s.cellsLeft} / ${s.cellsTotal}`, `+${s.healthBonus}`],
-            ['Flawless', s.flawless ? 'no cells lost' : 'lost cells', `+${s.flawlessBonus}`],
+            ['Flawless', s.flawless ? 'no cells lost' : 'cells were lost', `+${s.flawlessBonus}`],
             ['Time', `${formatTime(s.time)} · par ${formatTime(s.par)}`, `+${s.timeBonus}`],
         ];
         const nodes: Node[] = [];
         const line = (name: string, detail: string, value: string, y: number, valueColor: string = GREY.text) => {
             const row = makeNode(tab, name, 0, 0, { y });
             makeLabel(row, 'Name', name, { size: FONT.label, color: GREY.text, align: 'left', x: x0, y: 12 });
-            if (detail) makeLabel(row, 'Detail', detail, { font: 'body', size: 24, color: GREY.soft, align: 'left', x: x0, y: -16 });
+            if (detail) makeLabel(row, 'Detail', detail, { font: 'body', size: 26, color: GREY.soft, align: 'left', x: x0, y: -16 });
             makeLabel(row, 'Value', value, { size: FONT.heading - 3, color: valueColor, align: 'right', x: x1, y: 0 });
             nodes.push(row);
         };
@@ -217,8 +217,8 @@ export class RoundWonScreen extends GameScreen {
                 });
             }
             makeLabel(cardNode, 'Title', spec.title, { size: FONT.heading, color: selected ? INK_TEXT.ink : live ? spec.color : GREY.dim, y: titleY });
-            if (twoButtons) makeLabel(cardNode, 'Text', 'Add a row or a column', { font: 'body', size: 24, color: inkSoft, y: textY, width: cw - 30, height: 28 });
-            else makeLabel(cardNode, 'Text', opt.available ? spec.text : spec.full, { font: 'body', size: 24, color: inkSoft, y: textY, width: cw - 30, height: 56, anchorY: 1 });
+            if (twoButtons) makeLabel(cardNode, 'Text', 'Add a row or a column', { font: 'body', size: 26, color: inkSoft, y: textY, width: cw - 30, height: 28 });
+            else makeLabel(cardNode, 'Text', opt.available ? spec.text : spec.full, { font: 'body', size: 26, color: inkSoft, y: textY, width: cw - 30, height: 56, anchorY: 1 });
 
             // Step 2 waits for step 1: shown, but greyed and not clickable.
             if (!live) return;

@@ -99,7 +99,7 @@ export class BossIntroScreen extends GameScreen {
         if (boss.tier > TIER_BADGES) makeLabel(twist, 'TierMore', `Tier ${tierNumeral(boss.tier)}`, { size: FONT.labelSmall, color: suitColor, align: 'right', x: x1, y: twistH / 2 - 80 });
         makeLabel(twist, 'Rule', twistText(boss.suit, boss.tier), { font: 'body', size: FONT.bodySmall + 3, color: INK_TEXT.main, align: 'left', x: x0, y: 10, width: x1 - x0, height: 56, anchorY: 0.5 });
         const change = twistChange(boss.suit, boss.tier) ?? 'Each time you meet him, this gets one tier stronger.';
-        makeLabel(twist, 'Change', `Tier ${tierNumeral(boss.tier)}: ${change}`, { font: 'body', size: 24, color: INK_TEXT.second, align: 'left', x: x0, y: -twistH / 2 + 48, width: x1 - x0, height: 32 });
+        makeLabel(twist, 'Change', `Tier ${tierNumeral(boss.tier)}: ${change}`, { font: 'body', size: 26, color: INK_TEXT.second, align: 'left', x: x0, y: -twistH / 2 + 48, width: x1 - x0, height: 32 });
 
         // Counter strip.
         const counterTop = twistTop - twistH - 26, counterH = 66;

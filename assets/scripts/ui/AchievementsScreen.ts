@@ -46,10 +46,12 @@ export class AchievementsScreen extends GameScreen {
         ACES.forEach((ace, i) => {
             const prog = Game.profile.aces[ace.id];
             const x = colX[i];
-            const cell = makeNode(root, `Ace ${ace.id}`, 440, 480, { x, y: top - 240 });
-            // Each Ace sits in its own open bracket on the smoke.
-            frame(cell, 'Bracket', 440, 480, {}).setSiblingIndex(0);
-            const cardY = 240 - 126;
+            // Each Ace sits in its own open bracket on the smoke, its card 36 px below the top
+            // rail so the rail never crosses the art (decision 137).
+            const cellH = 520;
+            const cell = makeNode(root, `Ace ${ace.id}`, 440, cellH, { x, y: top - cellH / 2 });
+            frame(cell, 'Bracket', 440, cellH, {}).setSiblingIndex(0);
+            const cardY = cellH / 2 - 36 - 126;
             makeSprite(cell, 'Card', kit.classicFrame({ suit: ace.suit, rank: 14 }), 180, 252, { y: cardY });
             if (prog.earned) {
                 makeSprite(cell, 'Ring', ringFrame(204, 276, 'gold'), 204, 276, { y: cardY });

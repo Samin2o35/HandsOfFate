@@ -24,12 +24,15 @@ for b in d['boxes']:
     if b['depth'] <= 1: continue
     g.rectangle([x0, y0, x1, y1], outline=col[b['kind']], width=2 if b['kind']=='button' else 1)
 def wrap(t, f, maxw):
-    lines, cur = [], ''
-    for word in t.split(' '):
-        nxt = (cur + ' ' + word).strip()
-        if g.textlength(nxt, font=f) <= maxw or not cur: cur = nxt
-        else: lines.append(cur); cur = word
-    lines.append(cur); return lines
+    lines = []
+    for para in t.split('\n'):  # explicit breaks first (the Dealer's lines are pre-wrapped)
+        cur = ''
+        for word in para.split(' '):
+            nxt = (cur + ' ' + word).strip()
+            if g.textlength(nxt, font=f) <= maxw or not cur: cur = nxt
+            else: lines.append(cur); cur = word
+        lines.append(cur)
+    return lines
 warn = []
 for b in d['boxes']:
     if b['kind'] != 'label' or not b['text']: continue
@@ -40,7 +43,7 @@ for b in d['boxes']:
         while px > 6 and max(g.textlength(l, font=f) for l in wrap(t, f, bw)) * 0 + len(wrap(t, f, bw)) * px * 1.15 > (y1 - y0) + 1:
             px -= 1; f = font(px)
         if px < b['size']*s*0.8*0.7: warn.append(f"shrunk hard: {b['name']} '{t[:30]}'")
-    lines = wrap(t, f, bw) if b['overflow'] in (2, 3) else [t]
+    lines = wrap(t, f, bw) if b['overflow'] in (2, 3) else t.split('\n')
     lh = px * 1.15; cy = (y0+y1)/2 - lh*len(lines)/2
     if b['overflow'] == 3 and lh*len(lines) > (y1-y0) + 2: warn.append(f"label taller than box: {b['name']}")
     for i, l in enumerate(lines):

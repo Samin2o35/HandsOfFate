@@ -17,7 +17,7 @@ import { Node, UITransform, Sprite, Rect, Label, Mask, Color } from 'cc';
 import { Hand } from '../core/evaluate';
 import { HAND_INFO, EFFECT_NAME, EFFECT_CHARGES } from '../core/hands';
 import { Opponent } from '../core/opponents';
-import { SUIT_COLOR_HEX, Suit } from '../core/cards';
+import { SUIT_COLOR_HEX, Suit, DEALER_CARD_PATH } from '../core/cards';
 import { HealthGrid, healthCols } from '../core/health';
 import { BOSSES, twistText, tierNumeral } from '../core/bosses';
 import { UiKit, makeNode, makeSprite, makeLabel, makeButton, textWidth } from './UiKit';
@@ -120,7 +120,7 @@ export function buildStrip(root: Node, g: TableRegions, round: number, phase: st
 
     const sx = g.R - 476;
     frame(root, 'ScoreRail', 320, 72, { x: sx + 160, y }, { closed: true });
-    makeLabel(root, 'Extra', 'SCORE', { size: 18, color: GREY.soft, align: 'left', x: sx + 24, y });
+    makeLabel(root, 'Extra', 'SCORE', { size: 22, color: GREY.soft, align: 'left', x: sx + 24, y });
     const scoreLabel = makeLabel(root, 'Score', score.toLocaleString('en-US'), { size: 44, color: INK_TEXT.gold, align: 'right', x: sx + 296, y: y + 2 });
     makeButton(root, 'Options', ButtonStyle.Dark, 'Options', 160, 72, { x: g.R - 80, y }, onOptions, 27);
     return { phase: phaseLabel, score: scoreLabel };
@@ -137,12 +137,12 @@ export function buildJoker(root: Node, g: TableRegions, cx: number, tableTop: nu
     const x = Math.round(cx / 2) * 2;
     const holder = makeNode(root, 'Joker', 180, visible, { x, y: top, anchorY: 1 });
     holder.addComponent(Mask).type = Mask.Type.GRAPHICS_RECT;
-    makeSprite(holder, 'Card', kit.frame('cards/updated/joker_true'), 180, 252, { y: -126 });
+    makeSprite(holder, 'Card', kit.frame(DEALER_CARD_PATH), 180, 252, { y: -126 });
     // Beside his card: the round's news (round won, what you took), or one of his lines.
     // jokerSay() (ui/joker.ts) writes into JokerQuote during the fight.
     const mx = x + 104, mw = Math.min(500, g.R - 476 - 16 - mx);
     if (message) {
-        makeLabel(root, 'JokerTitle', message.title, { size: 21, color: GREY.text, align: 'left', x: mx, y: g.T - 42, width: mw, height: 28 });
+        makeLabel(root, 'JokerTitle', message.title, { size: 24, color: GREY.text, align: 'left', x: mx, y: g.T - 42, width: mw, height: 28 });
         makeLabel(root, 'JokerLine', message.body, { font: 'body', size: 26, color: GREY.soft, align: 'left', x: mx, y: g.T - 72, width: mw, height: 30 });
     } else {
         makeLabel(root, 'JokerQuote', quote ? `“${quote}”` : '', { font: 'body', size: 28, color: GREY.soft, align: 'left', x: mx, y: g.T - 56, width: mw, height: 64 });
@@ -227,15 +227,21 @@ export function buildHandList(root: Node, hands: readonly Hand[], left: number, 
         const x0 = -w / 2;
         const back = makeSprite(n, 'Ring', ringFrame(w + 8, rowH - 2, 'gold'), w + 8, rowH - 2);
         back.node.active = false;
-        makeLabel(n, 'Tag', lineTag(hand), { size: 20, color: GREY.soft, align: 'left', x: x0 + 10 });
-        makeSprite(n, 'Icon', kit.suitIcon(hand.suit), 27, 27, { x: x0 + 63 });
-        makeLabel(n, 'Name', HAND_INFO[hand.category].name, { size: 24, color: GREY.text, align: 'left', x: x0 + 88, width: 116, height: rowH - 8 });
-        makeLabel(n, 'Effect', `${EFFECT_NAME[hand.effect]} ${cooldownText(hand.cooldown)}`, { font: 'body', size: 27, color: GREY.soft, align: 'left', x: x0 + 204, width: 116, height: rowH - 8 });
+        // Tag and pip, then the name, which gets all the room up to the effect (decision 136).
+        // The effect and timer are right-aligned: against the charge pips (heal, armor) or at
+        // the row's end (attack, rot), so "Three of a kind" never runs into "Attack 3.5s".
+        makeLabel(n, 'Tag', lineTag(hand), { size: 22, color: GREY.soft, align: 'left', x: x0 + 6 });
+        makeSprite(n, 'Icon', kit.suitIcon(hand.suit), 27, 27, { x: x0 + 50 });
         const pips: Node[] = [];
         const charges = EFFECT_CHARGES[hand.effect];
+        const pipsW = Number.isFinite(charges) ? charges * 17 + 8 : 0;
         if (Number.isFinite(charges)) {
-            for (let k = 0; k < charges; k++) pips.push(makeSprite(n, `Pip${k}`, kit.suitIcon(hand.suit), 18, 18, { x: w / 2 - 3 - (charges - 1 - k) * 17 }).node);
+            for (let k = 0; k < charges; k++) pips.push(makeSprite(n, `Pip${k}`, kit.suitIcon(hand.suit), 18, 18, { x: w / 2 - 12 - (charges - 1 - k) * 17 }).node);
         }
+        const effect = makeLabel(n, 'Effect', `${EFFECT_NAME[hand.effect]} ${cooldownText(hand.cooldown)}`, { font: 'body', size: 27, color: GREY.soft, align: 'right', x: w / 2 - 4 - pipsW });
+        const nameLeft = x0 + 72;
+        const nameW = Math.max(60, Math.floor(w / 2 - 4 - pipsW - textWidth(effect) - 12 - nameLeft));
+        makeLabel(n, 'Name', HAND_INFO[hand.category].name, { size: 24, color: GREY.text, align: 'left', x: nameLeft, width: nameW, height: rowH - 8 });
         if (i < lines.length - 1 || extra) rule(root, `Rule ${i}`, w - 12, left + 6, rowTop - pitch + 4);
         if (onTap) n.on(Node.EventType.TOUCH_END, () => onTap(hand));
         entries.push({ hand, node: n, back, pips });
@@ -244,7 +250,7 @@ export function buildHandList(root: Node, hands: readonly Hand[], left: number, 
     if (lines.length === 0) {
         makeLabel(root, 'NoHands', 'No hands yet: fill a row or a column.', { font: 'body', size: 26, color: GREY.dim, align: 'left', x: left + 8, y: tailY, width: w - 8, height: 30 });
     } else if (leftovers) {
-        makeLabel(root, 'Leftovers', `+ ${leftovers} card${leftovers > 1 ? 's' : ''} fire alone as high cards`, { font: 'body', size: 26, color: GREY.dim, align: 'left', x: left + 8, y: tailY, width: w - 8, height: 30 });
+        makeLabel(root, 'Leftovers', `+ ${leftovers} card${leftovers > 1 ? 's fire' : ' fires'} alone as ${leftovers > 1 ? 'high cards' : 'a high card'}`, { font: 'body', size: 26, color: GREY.dim, align: 'left', x: left + 8, y: tailY, width: w - 8, height: 30 });
     }
     return { entries, bottom: top - hh };
 }
@@ -319,7 +325,7 @@ export function buildOpponentPanel(root: Node, r: Region, o: Opponent, hands: re
     makeLabel(panel, 'Sub', sub, { font: 'body', size: 30, color: o.boss ? SUIT_COLOR_HEX[o.boss.suit] : GREY.soft, align: 'left', x: tx, y: top - 97 });
     if (o.boss) {
         const info = BOSSES[o.boss.suit];
-        makeLabel(panel, 'Twist', `${info.twist}: ${twistText(o.boss.suit, o.boss.tier)}`, { font: 'body', size: 24, color: GREY.soft, align: 'left', x: tx, y: top - 122, width: tw, anchorY: 1 });
+        makeLabel(panel, 'Twist', `${info.twist}: ${twistText(o.boss.suit, o.boss.tier)}`, { font: 'body', size: 26, color: GREY.soft, align: 'left', x: tx, y: top - 122, width: tw, anchorY: 1 });
     }
 
     // Their hands, as many as fit above their health.
@@ -334,15 +340,15 @@ export function buildOpponentPanel(root: Node, r: Region, o: Opponent, hands: re
     const room = r.height - fixed - gridH;
     const maxLines = Math.max(1, Math.floor(room / 50));
     const shown = listed.slice(0, listed.length > maxLines ? maxLines - 1 : maxLines);
-    makeLabel(panel, 'TheirHands', 'THEIR HANDS', { size: 18, color: GREY.soft, align: 'left', x: x0, y: top - 266 });
+    makeLabel(panel, 'TheirHands', 'THEIR HANDS', { size: 22, color: GREY.soft, align: 'left', x: x0, y: top - 266 });
     shown.forEach((h, i) => {
         const y = top - 311 - i * 50;
         const ring = makeSprite(panel, `Their ${h.id}`, ringFrame(r.width - 44, 46, 'gold'), Math.round((r.width - 44) / 2) * 2, 46, { y }).node;
         ring.active = false;
         lines.set(h.id, ring);
         makeSprite(panel, `Icon ${h.id}`, kit.suitIcon(h.suit), 36, 36, { x: x0 + 18, y });
-        makeLabel(panel, `Name ${h.id}`, HAND_INFO[h.category].name, { size: 28, color: GREY.text, align: 'left', x: x0 + 50, y, width: 200, height: 40 });
-        makeLabel(panel, `Effect ${h.id}`, EFFECT_NAME[h.effect], { font: 'body', size: 32, color: GREY.soft, align: 'left', x: x0 + 260, y });
+        makeLabel(panel, `Name ${h.id}`, HAND_INFO[h.category].name, { size: 28, color: GREY.text, align: 'left', x: x0 + 50, y, width: 224, height: 40 });
+        makeLabel(panel, `Effect ${h.id}`, EFFECT_NAME[h.effect], { font: 'body', size: 32, color: GREY.soft, align: 'left', x: x0 + 290, y });
         makeLabel(panel, `Line ${h.id}`, `every ${cooldownText(cooldownOf(h))}`, { font: 'body', size: 32, color: GREY.soft, align: 'right', x: r.width / 2 - 30, y });
         rule(panel, `Rule ${h.id}`, r.width - 60, x0, y - 24);
     });
@@ -357,7 +363,7 @@ export function buildOpponentPanel(root: Node, r: Region, o: Opponent, hands: re
 
     // Their health and its count.
     const hTop = after - 28;
-    makeLabel(panel, 'HealthTitle', o.boss ? 'HIS HEALTH' : 'THEIR HEALTH', { size: 18, color: GREY.soft, align: 'left', x: x0, y: hTop });
+    makeLabel(panel, 'HealthTitle', o.boss ? 'HIS HEALTH' : 'THEIR HEALTH', { size: 22, color: GREY.soft, align: 'left', x: x0, y: hTop });
     const grid = buildHealthGrid(panel, health, r.width - 300, gridH, x0, hTop - 27, pitch, 0.19);
     const alive = health.cells.filter((c) => c.state === 'alive').length;
     const [count, tot] = countLabels(panel, r.width / 2 - 90, hTop - 91, 88, alive, total);
