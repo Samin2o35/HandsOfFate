@@ -14,7 +14,7 @@
 import { _decorator, Label, game, sys, Button } from 'cc';
 import { Sound } from '../app/Sound';
 import { GameScreen } from './GameScreen';
-import { UiButton } from './UiButton';
+import { UiButton, ButtonStyle } from './UiButton';
 import { Game, SPEED_NAME } from '../app/Game';
 import { ScreenManager } from '../app/ScreenManager';
 import { confirmBox } from './Modal';
@@ -42,6 +42,11 @@ export class TitleScreen extends GameScreen {
         this.wire(this.achievementsButton, this.onAchievements);
         this.wire(this.quitButton, this.onQuit);
         // Quit only makes sense on Android; iOS and the web have no "quit".
+        // Open table: New Run is the one red card; the rest are outlines.
+        this.newRunButton && (this.newRunButton.style = ButtonStyle.Red);
+        for (const b of [this.continueButton, this.howToPlayButton, this.optionsButton, this.achievementsButton, this.quitButton]) {
+            if (b) b.style = ButtonStyle.Dark;
+        }
         if (this.quitButton) this.quitButton.node.active = sys.isNative && sys.os === sys.OS.ANDROID;
         this.refresh();
     }

@@ -2,7 +2,7 @@
 // Runs a screen's real build() code against the cc mock and writes every node's
 // box (world position, size, label text) to JSON, for draw.py to turn into a PNG.
 // Usage: npm run layout (all screens), or npx tsx --tsconfig tools/layout/tsconfig.json tools/layout/render.ts <screen> <w> <h> <out.json> [args]
-import { Node, UITransform, Label, Sprite, Button, SpriteFrame } from 'cc';
+import { Node, UITransform, Label, Sprite, Button, SpriteFrame, RichText, Mask } from 'cc';
 import { UiKit } from '../../assets/scripts/ui/UiKit';
 
 const [screen, ws, hs, out, a1, a2] = process.argv.slice(2);
@@ -58,6 +58,7 @@ async function main() {
         celebrateAce(host, (a1 as any) ?? ACES[0].id);
     } else {
         const mod = await import(`../../assets/scripts/ui/${screen}Screen`);
+        if (process.env.SYNC) (await import('cc') as any).setSyncTweens(true);
         const comp = host.addComponent<any>(mod[`${screen}Screen`]);
         let params: any;
         if (screen === 'BossIntro') params = { run: sampleRun(5, { suit: a1 ?? 'S', tier: Number(a2 ?? 1) }) };
@@ -80,6 +81,14 @@ async function main() {
             }
         }
         comp.onShow?.(params);
+        if (screen === 'Planning' && process.env.FORGE) { comp.forgeOpen = true; await new Promise((r) => setTimeout(r, 20)); comp.rebuild(); }
+        if (process.env.FRAMES && screen === 'Fight') {
+            // Stop part-way through a fight (tweens finish at once), for mockups.
+            const cc: any = await import('cc');
+            cc.setSyncTweens(true);
+            await new Promise((r) => setTimeout(r, 20));
+            for (let i = 0; i < Number(process.env.FRAMES) && !comp.ending; i++) comp.update(1 / 60);
+        }
         if (process.env.SIMULATE && screen === 'Fight') {
             // Play the whole fight frame by frame (tweens finish at once) and report.
             const cc: any = await import('cc');
@@ -97,22 +106,58 @@ async function main() {
     }
     await new Promise((r) => setTimeout(r, 50));
 
+    // Health cells: what each one shows (fight: the shown grid; elsewhere alive).
+    const cellState = new Map<Node, string>();
+    const anyComp: any = host.components[host.components.length - 1];
+    for (const side of ['player', 'enemy']) {
+        const parts = anyComp?.grids?.[side];
+        const grid = anyComp?.shown?.[side];
+        if (parts && grid) parts.cells.forEach((c: any, i: number) => cellState.set(c.node, grid.cells[i].shield && grid.cells[i].state === 'alive' ? 'shield' : grid.cells[i].state));
+    }
     const boxes: any[] = [];
+    const frames: Record<string, any> = {};
+    const clipOf = (n: Node): any => {
+        for (let p: Node | null = n.parent; p; p = p.parent) {
+            if (p.getComponent(Mask as any)) {
+                const ut = p.getComponent<UITransform>(UITransform)!; const w = p.worldPosition;
+                return { x: w.x - ut.width * ut.anchorX, y: w.y - ut.height * ut.anchorY, w: ut.width, h: ut.height };
+            }
+        }
+        return undefined;
+    };
     const walk = (n: Node, depth: number) => {
         if (!n.active) return;
         const ut = n.getComponent<UITransform>(UITransform);
         if (ut && n !== canvas) {
             const w = n.worldPosition; const sx = n.scale.x, sy = n.scale.y;
-            const lab = n.getComponent<Label>(Label);
+            let lab: any = n.getComponent<Label>(Label);
+            const rich = n.getComponent<RichText>(RichText) as any;
+            if (!lab && rich?.string) {
+                // Rich text (the Dealer's lines): plain words, in the body font.
+                lab = { string: rich.string.replace(/<[^>]+>/g, ''), fontSize: rich.fontSize, overflow: 3, kind: 'body',
+                    color: rich.fontColor ?? { r: 59, g: 50, b: 74 }, horizontalAlign: 0 };
+                if (ut.width < 20) ut.width = rich.maxWidth || 480;
+                if (ut.height < 20) { ut.height = Math.ceil(lab.string.length * rich.fontSize * 0.5 / ut.width + 1) * (rich.lineHeight || rich.fontSize); }
+            }
             const spr = n.getComponent<Sprite>(Sprite) as any;
             const fillHex = spr && !spr.spriteFrame && spr.color && !(spr.color.r === 255 && spr.color.g === 255 && spr.color.b === 255)
                 ? '#' + [spr.color.r, spr.color.g, spr.color.b].map((v: number) => v.toString(16).padStart(2, '0')).join('') : undefined;
             const frame = spr?.spriteFrame?.name as string | undefined;
+            if (frame?.startsWith('kitC:') && !frames[frame]) {
+                const src = spr.spriteFrame.texture?.image?.src;
+                if (src) frames[frame] = { w: src.width, h: src.height, slice: spr.spriteFrame.insetLeft, data: Buffer.from(src._data).toString('base64') };
+            }
+            const tint = spr && spr.spriteFrame && spr.color && !(spr.color.r === 255 && spr.color.g === 255 && spr.color.b === 255)
+                ? [spr.color.r, spr.color.g, spr.color.b] : undefined;
             boxes.push({
                 name: n.name, depth,
                 x: w.x - ut.width * ut.anchorX * sx, y: w.y - ut.height * ut.anchorY * sy, w: ut.width * sx, h: ut.height * sy,
                 kind: lab ? 'label' : n.getComponent(Button) ? 'button' : n.getComponent(Sprite) ? 'sprite' : 'node',
-                text: lab?.string, fill: fillHex, frame, size: lab?.fontSize, overflow: lab?.overflow,
+                text: lab?.string, fill: fillHex, frame, tint, clip: clipOf(n), alpha: spr && !spr.spriteFrame ? spr.color?.a : undefined,
+                color: lab ? '#' + [lab.color.r, lab.color.g, lab.color.b].map((v: number) => v.toString(16).padStart(2, '0')).join('') : undefined,
+                align: lab?.horizontalAlign, font: lab ? lab.kind : undefined,
+                cell: cellState.get(n), button: n.getComponent(Button) ? true : undefined,
+                label: n.getComponent(Button) ? (n.getComponentInChildren<Label>(Label)?.string ?? '') : undefined, size: lab?.fontSize, overflow: lab?.overflow,
                 need: lab ? lab.string.length * lab.fontSize * (lab.kind === 'body' ? 0.5 : 0.62) : undefined,
             });
         }
@@ -120,7 +165,7 @@ async function main() {
     };
     walk(canvas, 0);
     const fs = await import('fs');
-    fs.writeFileSync(out, JSON.stringify({ W, H, screen, boxes }, null, 1));
+    fs.writeFileSync(out, JSON.stringify({ W, H, screen, boxes, frames }));
     console.log(`${screen} ${sw}x${sh} -> design ${W}x${H}, ${boxes.length} boxes`);
 }
 main().catch((e) => { console.error(e); process.exit(1); });

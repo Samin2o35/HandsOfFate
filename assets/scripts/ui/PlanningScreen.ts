@@ -21,12 +21,14 @@ import { UiKit, makeNode, makeSprite, makeLabel, makeButton, clearChildren, FONT
 import { ButtonStyle } from './UiButton';
 import { BoardView, worldRect, unionRects } from './BoardView';
 import { ForgeView } from './ForgeView';
-import { buildHealthGrid, cardWords, THEIR_PITCH } from './views';
+import { cardWords } from './views';
 import { finishRound, PlanningMessage } from './flow';
 import { tutorialStep, setTutorialStep, finishTutorial, showTutorial, suitLegend } from './Tutorial';
 import {
-    tableRegions, TableRegions, buildStrip, buildHandList, paintEntry, buildOpponentPanel, ListEntry, box, GREY,
+    tableRegions, TableRegions, buildStrip, buildHandList, paintEntry, buildOpponentPanel, ListEntry, GREY, buildJoker, buildHealthBlock,
 } from './table';
+import { frame, rule, ringFrame } from './kitC';
+import { healthCols } from '../core/health';
 
 /** runs:round of the last round whose cards were dealt in (see rebuild). */
 let dealtRound = '';
@@ -34,7 +36,6 @@ let dealtRound = '';
 const { ccclass } = _decorator;
 
 const STASH_H = 180;
-const HEALTH_H = 150;
 
 @ccclass('PlanningScreen')
 export class PlanningScreen extends GameScreen {
@@ -83,13 +84,14 @@ export class PlanningScreen extends GameScreen {
         const root = this.content;
         this.forge = null;
 
-        buildStrip(root, g, run.round, run.isBoss ? 'Boss round · planning' : 'Planning', run.score, () => this.openOptions(), this.message);
+        buildStrip(root, g, run.round, run.isBoss ? 'Boss round · planning' : 'Planning', run.score, () => this.openOptions());
 
-        // Left column, bottom up: the stash, your health, then your hands fill the rest.
+        // Left column: your hands from the top, then your health, the stash at the bottom.
         const side = g.side;
         const sideBottom = side.top - side.height;
         const stashTop = sideBottom + STASH_H;
-        let healthTop = stashTop + 30 + HEALTH_H + 34;
+        const cells = run.data.healthCells;
+        const healthH = Math.max(168, Math.ceil(cells / healthCols(cells)) * 34 + 66);
 
         const board = this.board = new BoardView(root, this.dragLayer!, run, {
             left: g.board.left, top: g.board.top, width: g.board.width, height: g.board.height,
@@ -99,19 +101,18 @@ export class PlanningScreen extends GameScreen {
             selected: (card) => { this.selected = card; this.pickedHand = null; this.message = null; this.refreshSelection(); },
             badge: (id) => this.pickHand(id),
         }, this.selected?.id ?? null);
+        buildJoker(root, g, board.block.left + board.block.width / 2, board.frameTop, this.message);
 
-        const listTop = side.top;
-        const list = buildHandList(root, run.board().hands, side.left, listTop, side.width, listTop - healthTop - 20, (h) => this.pickHand(h.id));
+        const listTop = side.top + 4;
+        const listMax = listTop - (stashTop + 4) - 22 - healthH - 22;
+        const list = buildHandList(root, run.board().hands, side.left, listTop, side.width, listMax, (h) => this.pickHand(h.id));
         this.entries = list.entries;
-        healthTop = list.bottom - 24;
+        this.healthNode = buildHealthBlock(root, side.left, list.bottom - 22, side.width, cells).grid.node;
 
-        const cells = run.data.healthCells;
-        makeLabel(root, 'YouLabel', `YOU · ${cells} / ${cells}`, { size: FONT.labelSmall, spacing: 2, color: GREY.soft, align: 'left', x: side.left, y: healthTop - 12 });
-        this.healthNode = buildHealthGrid(root, cells, side.width, HEALTH_H, side.left, healthTop - 34).node;
-
-        this.buildOpponent(root, run, g);
-        this.buildActions(root, run, g);
+        // The Forge drawer takes the opponent's place while it's open.
         if (this.forgeOpen) this.buildForgeDrawer(root, run, g);
+        else this.buildOpponent(root, run, g);
+        this.buildActions(root, run, g);
         this.refreshSelection(false);
 
         // A new round's cards are dealt in once (not on every rebuild or when back from Options).
@@ -124,21 +125,17 @@ export class PlanningScreen extends GameScreen {
 
     private buildOpponent(root: Node, run: Run, g: TableRegions) {
         const o = run.opponent;
-        const panel = buildOpponentPanel(root, g.opponent, o, evaluateBoard(o.grid).hands, (h) => h.cooldown * o.cooldownMultiplier);
-        const a = panel.healthArea;
-        const grid = buildHealthGrid(panel.node, opponentHealth(o), a.width, a.height, a.left, a.top, THEIR_PITCH);
-        grid.node.setPosition(a.left + (a.width - grid.width) / 2, a.top);
+        buildOpponentPanel(root, g.opponent, o, evaluateBoard(o.grid).hands, (h) => h.cooldown * o.cooldownMultiplier, opponentHealth(o));
     }
 
     private buildActions(root: Node, run: Run, g: TableRegions) {
-        const kit = UiKit.get();
         const a = g.actions;
         const y = a.top - a.height / 2;
         const forgeW = 220, gap = 20;
         const ready = run.forgeAvailable && mergeablePairs(run.ownedCards()).length > 0;
         const fx = a.left + forgeW / 2;
         // A gold ring when two identical cards are waiting to be forged.
-        if (ready && !this.forgeOpen) makeSprite(root, 'ForgeGlow', kit.cardFrameGold, forgeW + 16, a.height + 16, { x: fx, y }, true);
+        if (ready && !this.forgeOpen) makeSprite(root, 'ForgeGlow', ringFrame(forgeW + 16, a.height + 16, 'gold'), forgeW + 16, a.height + 16, { x: fx, y });
         const fb = makeButton(root, 'ForgeButton', this.forgeOpen ? ButtonStyle.Cream : ButtonStyle.Dark, this.forgeOpen ? 'Close' : 'Forge', forgeW, a.height, { x: fx, y }, () => this.toggleForge(), 30);
         this.forgeButton = fb.node;
         const startW = a.width - forgeW - gap;
@@ -148,12 +145,12 @@ export class PlanningScreen extends GameScreen {
     /** The Forge as a drawer over the opponent panel. */
     private buildForgeDrawer(root: Node, run: Run, g: TableRegions) {
         const r = g.opponent;
-        const drawer = box(root, 'ForgeDrawer', r.width, r.height, { x: r.left + r.width / 2, y: r.top - r.height / 2 }, GREY.raised).node;
+        const drawer = frame(root, 'ForgeDrawer', r.width, r.height, { x: r.left + r.width / 2, y: r.top - r.height / 2 }, { caption: 'THE FORGE' });
         const x0 = -r.width / 2 + 30;
-        makeLabel(drawer, 'Title', 'THE FORGE', { size: FONT.heading, spacing: 2, color: GREY.text, align: 'left', x: x0, y: r.height / 2 - 50 });
-        makeLabel(drawer, 'What', 'Two identical cards become one better card. Once per round.', { font: 'body', size: FONT.bodySmall, color: GREY.soft, align: 'left', x: x0, y: r.height / 2 - 100, width: r.width - 60, height: 60 });
-        makeLabel(drawer, 'Tip', 'Tap one of the pair on your board to pick which pair.', { font: 'body', size: 24, color: GREY.dim, align: 'left', x: x0, y: -r.height / 2 + 50, width: r.width - 60, height: 36 });
-        this.forge = new ForgeView(drawer, run, this.selected?.id ?? null, 0, 10, r.width - 60, 300, (made) => {
+        makeLabel(drawer, 'What', 'Two identical cards become one better card. Once per round.', { font: 'body', size: 30, color: GREY.soft, align: 'left', x: x0, y: r.height / 2 - 70, width: r.width - 60, height: 40 });
+        makeLabel(drawer, 'Tip', 'Tap one of the pair on your board to pick which pair.', { font: 'body', size: 27, color: GREY.dim, align: 'left', x: x0, y: -r.height / 2 + 50, width: r.width - 60, height: 36 });
+        rule(drawer, 'Rule', r.width - 60, x0, -r.height / 2 + 90);
+        this.forge = new ForgeView(drawer, run, this.selected?.id ?? null, 0, 20, r.width - 60, 380, (made) => {
             if (tutorialStep() === 6) finishTutorial();
             this.selected = made;
             this.forgeOpen = false;

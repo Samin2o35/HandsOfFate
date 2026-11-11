@@ -85,7 +85,7 @@ export class OptionsScreen extends GameScreen {
         y = T - 240;
         sectionTitle('TutTitle', 'TUTORIAL', rightX, y);
         y -= 70;
-        makeButton(root, 'Replay', ButtonStyle.Cream, 'Replay the tutorial', colW, 100, { x: rightX, y }, () => this.replayTutorial());
+        makeButton(root, 'Replay', ButtonStyle.Dark, 'Replay the tutorial', colW, 100, { x: rightX, y }, () => this.replayTutorial());
 
         // Background motion cycles Full → Low → Off; Screen shake (and the fight zoom) on or off.
         y -= 180;
@@ -109,7 +109,7 @@ export class OptionsScreen extends GameScreen {
         y -= 180;
         sectionTitle('ResetTitle', 'PROGRESS', rightX, y);
         y -= 70;
-        makeButton(root, 'Reset', ButtonStyle.Red, 'Reset all progress', colW, 100, { x: rightX, y }, () => {
+        makeButton(root, 'Reset', ButtonStyle.Dark, 'Reset all progress', colW, 100, { x: rightX, y }, () => {
             confirmBox(this.node, 'RESET EVERYTHING?', 'Best run, Ace progress and your saved run will be deleted. This can\'t be undone.', 'Reset', 'Keep', () => {
                 Game.resetProgress();
                 this.build();

@@ -11,7 +11,7 @@ import { Card, Suit, SUITS, cardLabel } from '../core/cards';
 import { ForgeUpgrade, forgeUpgrades, mergeablePairs } from '../core/forge';
 import { UiKit, makeSprite, makeLabel, makeButton, makeNode, FONT } from './UiKit';
 import { ButtonStyle } from './UiButton';
-import { box, GREY } from './table';
+import { GREY } from './table';
 
 export class ForgeView {
     readonly root: Node;
@@ -48,12 +48,11 @@ export class ForgeView {
         for (const c of [...this.root.children]) { c.removeFromParent(); c.destroy(); }
         const kit = UiKit.get();
         const { w, h } = this;
-        box(this.root, 'Panel', w, h, {}, GREY.panel);
         const left = -w / 2 + 24;
 
-        // Stacked: the pair (1×) on top, the buttons in a row underneath.
+        // Stacked: the pair (1.5×) on top, the buttons in a row underneath.
         const pair = this.pair();
-        const mw = 90, mh = 126;
+        const mw = 135, mh = 189;
         const cardsY = h / 2 - 24 - mh / 2;
         const usable = this.run.forgeAvailable && pair !== null;
         const reason = !this.run.forgeAvailable ? 'Used this round' : !pair ? 'Needs two identical cards' : '';
@@ -61,9 +60,9 @@ export class ForgeView {
             // No pair to show (or already used): the reason takes the cards' place.
             makeLabel(this.root, 'Reason', reason, { font: 'body', size: FONT.body, color: GREY.soft, y: cardsY });
         } else if (pair) {
-            makeSprite(this.root, 'CardA', kit.cardFrame(pair[0]), mw, mh, { x: -mw / 2 - 40, y: cardsY });
-            makeLabel(this.root, 'Plus', '+', { size: FONT.heading, color: GREY.text, x: 0, y: cardsY });
-            makeSprite(this.root, 'CardB', kit.cardFrame(pair[1]), mw, mh, { x: mw / 2 + 40, y: cardsY });
+            makeSprite(this.root, 'CardA', kit.cardFrame(pair[0]), mw, mh, { x: -mw / 2 - 30, y: cardsY });
+            makeLabel(this.root, 'Plus', '+', { size: 66, color: GREY.text, x: 0, y: cardsY });
+            makeSprite(this.root, 'CardB', kit.cardFrame(pair[1]), mw, mh, { x: mw / 2 + 30, y: cardsY });
         }
 
         const areaLeft = left;
@@ -76,7 +75,7 @@ export class ForgeView {
             const n = suits.length + 1;
             const bw = (areaW - (n - 1) * 12) / n;
             suits.forEach((suit, i) => {
-                const b = makeButton(this.root, `Suit ${suit}`, ButtonStyle.Cream, '', bw, bh, { x: areaLeft + bw / 2 + i * (bw + 12), y: buttonsY }, () => this.apply(pair, { kind: 'suit', suit }));
+                const b = makeButton(this.root, `Suit ${suit}`, ButtonStyle.Dark, '', bw, bh, { x: areaLeft + bw / 2 + i * (bw + 12), y: buttonsY }, () => this.apply(pair, { kind: 'suit', suit }));
                 makeSprite(b.node, 'Icon', kit.suitIcon(suit as Suit), 36, 36, { y: 3 });
             });
             makeButton(this.root, 'Back', ButtonStyle.Dark, 'Back', bw, bh, { x: areaLeft + bw / 2 + suits.length * (bw + 12), y: buttonsY }, () => { this.picking = false; this.build(); }, 27);
@@ -93,7 +92,7 @@ export class ForgeView {
             ['Rank −1', usable && canDown, () => this.apply(pair!, { kind: 'rank', delta: -1 })],
         ];
         specs.forEach(([text, on, fn], i) => {
-            const b = makeButton(this.root, text, ButtonStyle.Cream, text, bw, bh, { x: areaLeft + bw / 2 + i * (bw + 12), y: buttonsY }, fn, 27);
+            const b = makeButton(this.root, text, ButtonStyle.Dark, text, bw, bh, { x: areaLeft + bw / 2 + i * (bw + 12), y: buttonsY }, fn, 27);
             b.interactable = on;
         });
     }

@@ -11,8 +11,8 @@ import { Sound } from '../app/Sound';
 import { Run } from '../core/run';
 import { Card } from '../core/cards';
 import { BoardResult } from '../core/evaluate';
-import { makeNode, makeLabel, FONT } from './UiKit';
-import { box } from './table';
+import { makeNode, makeLabel } from './UiKit';
+import { frame } from './kitC';
 import { CardView, buildSlot, cardScaleFor, CARD_W, CARD_H } from './views';
 import { buildBadge, BadgeParts, BADGE, GREY } from './table';
 
@@ -52,6 +52,8 @@ export class BoardView {
     badges: BoardBadges = { rows: [], cols: [] };
     /** The grid block (cards + badges) in the screen root's space: left, top, width, height. */
     block = { left: 0, top: 0, width: 0, height: 0 };
+    /** The top edge of the YOUR TABLE bracket, in the screen root's space (the Joker peeks over it). */
+    frameTop = 0;
 
     private slots: { node: Node; row: number; col: number }[] = [];
     private views: CardView[] = [];
@@ -150,6 +152,9 @@ export class BoardView {
         const left = Math.max(0, (this.layout.width - blockW) / 2);
         const top = -Math.max(0, (this.layout.height - blockH) / 2);
         this.block = { left: this.layout.left + left, top: this.layout.top + top, width: blockW, height: blockH };
+        this.frameTop = this.block.top + 34;
+        // YOUR TABLE: an open bracket round the cards and their medallions.
+        frame(this.root, 'TableFrame', blockW + 68, blockH + 64, { x: left + blockW / 2, y: top + 34 - (blockH + 64) / 2 }, { caption: 'YOUR TABLE' });
 
         const scoring = new Set<number>();
         for (const h of result.hands) if (h.source !== 'leftover') for (const pc of h.cards) scoring.add(pc.card.id);
@@ -186,21 +191,20 @@ export class BoardView {
     }
 
     private buildStash() {
-        makeLabel(this.stash, 'Title', 'STASH', { size: FONT.labelSmall, spacing: 2, color: GREY.soft, align: 'left', x: 0, y: -12 });
         const cards = this.run.stash;
         const w = CARD_W, h = CARD_H;
-        // The drop area: a flat strip behind the cards.
-        const sw = this.layout.stashWidth, sh = this.layout.stashHeight - 26;
-        box(this.stash, 'Back', sw, sh, { x: sw / 2, y: -26 - sh / 2 }, GREY.slot);
-        const room = this.layout.stashWidth - w;
-        const step = cards.length > 1 ? Math.min(w + 12, room / (cards.length - 1)) : 0;
+        // STASH: an open bracket; the whole stash area takes drops.
+        const sw = this.layout.stashWidth, sh = this.layout.stashHeight + 14;
+        frame(this.stash, 'Frame', sw + 28, sh, { x: sw / 2, y: 4 - sh / 2 }, { caption: 'STASH' });
+        const room = sw - w - 16;
+        const step = cards.length > 1 ? Math.min(97, room / (cards.length - 1)) : 0;
         cards.forEach((card, i) => {
-            const v = CardView.create(this.stash, card, w, h, w / 2 + i * step, -32 - h / 2);
+            const v = CardView.create(this.stash, card, w, h, 8 + w / 2 + i * step, -32 - h / 2);
             v.setSelected(card.id === this.selectedId);
             this.hook(v);
         });
         if (cards.length === 0) {
-            makeLabel(this.stash, 'Empty', 'Drop cards here', { font: 'body', size: FONT.bodySmall, color: GREY.dim, align: 'left', x: 16, y: -32 - h / 2 });
+            makeLabel(this.stash, 'Empty', 'Drop cards here', { font: 'body', size: 27, color: GREY.dim, align: 'left', x: 16, y: -32 - h / 2 });
         }
     }
 

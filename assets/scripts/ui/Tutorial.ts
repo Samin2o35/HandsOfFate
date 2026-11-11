@@ -16,6 +16,7 @@ import { Game } from '../app/Game';
 import { UiKit, makeNode, makeSprite, makeLabel, makeButton, FONT, COLOR } from './UiKit';
 import { ButtonStyle } from './UiButton';
 import { AnimatedCard } from './AnimatedCard';
+import { frame } from './kitC';
 
 export const TUTORIAL_STEPS = 6;
 
@@ -129,8 +130,6 @@ export function showTutorial(host: Node, v: TutorialView): Node {
     const textLeft = -panelW / 2 + 190;
     const panel = makeNode(overlay, 'Dealer', panelW, 300);
     panel.addComponent(BlockInputEvents); // the buttons under the Dealer can't be pressed by mistake
-    const back = makeSprite(panel, 'Back', kit.panelDark, panelW, 306, {}, true);
-    back.color = new Color(255, 255, 255, 235);
 
     const textNode = makeNode(panel, 'Text', textW, 10, { x: textLeft, anchorX: 0, anchorY: 1 });
     const rt = textNode.addComponent(RichText);
@@ -150,7 +149,7 @@ export function showTutorial(host: Node, v: TutorialView): Node {
     const body = makeNode(panel, 'Body', 0, 0);
     if (v.extra) y = v.extra(body, textW, textLeft, y) - 16;
     const buttonY = y - 43;
-    makeButton(body, 'Next', ButtonStyle.Cream, v.button, 260, 86, { x: textLeft + 130, y: buttonY }, () => v.onButton(), 30);
+    makeButton(body, 'Next', ButtonStyle.Red, v.button, 260, 86, { x: textLeft + 130, y: buttonY }, () => v.onButton(), 30);
     makeLabel(body, 'Count', `${v.step} / ${TUTORIAL_STEPS}`, { font: 'body', size: FONT.bodySmall, color: COLOR.lilac, align: 'left', x: textLeft + 290, y: buttonY });
     y -= 86 + pad;
     const panelH = Math.max(260, -y);
@@ -160,12 +159,11 @@ export function showTutorial(host: Node, v: TutorialView): Node {
     textNode.setPosition(textLeft, textNode.position.y + shift);
     body.setPosition(0, shift);
     panel.getComponent(UITransform)!.setContentSize(panelW, panelH);
-    back.node.getComponent(UITransform)!.setContentSize(panelW, panelH + 6);
-    back.node.setPosition(0, -3);
+    // The one filled box of the open table: room dark inside a cream rail, so his words read over the dim.
+    frame(panel, 'Back', panelW, panelH, {}, { closed: true, fill: 'room0', caption: 'THE DEALER' }).setSiblingIndex(0);
     const joker = makeSprite(panel, 'Joker', kit.frame('cards/updated/joker_true'), 120, 168, { x: -panelW / 2 + 90, y: panelH / 2 - pad - 84 });
     const anim = joker.node.addComponent(AnimatedCard);
     anim.strip = 'anim/joker_true';
-    makeLabel(panel, 'Name', 'The Dealer', { font: 'body', size: 24, color: COLOR.lilac, x: -panelW / 2 + 90, y: panelH / 2 - pad - 186 });
 
     if (onSide) {
         const px = (v.at === 'right' ? 1 : -1) * (tableW / 2 - 40 - panelW / 2);
@@ -179,7 +177,7 @@ export function showTutorial(host: Node, v: TutorialView): Node {
 /** Step 3's legend: the four suits and what they do. Returns the y below it. */
 export function suitLegend(parent: Node, width: number, left: number, top: number): number {
     const kit = UiKit.get();
-    const box = makeSprite(parent, 'Legend', kit.panelDark, width, 96, { x: left + width / 2, y: top - 48 }, true).node;
+    const box = frame(parent, 'Legend', width, 96, { x: left + width / 2, y: top - 48 }, { closed: true });
     const items: [string, 'S' | 'H' | 'C' | 'D'][] = [['Attack · forever', 'S'], ['Rot · forever', 'C'], ['Heal · 3 a fight', 'H'], ['Armor · 3 a fight', 'D']];
     items.forEach(([text, suit], i) => {
         const col = i % 2, row = Math.floor(i / 2);

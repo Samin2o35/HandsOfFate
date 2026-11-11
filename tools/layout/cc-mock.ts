@@ -85,8 +85,20 @@ export class UITransform extends Component {
     convertToNodeSpaceAR(v: Vec3) { const w = this.node.worldPosition; return new Vec3(v.x - w.x, v.y - w.y, 0); }
 }
 
-export class SpriteFrame { constructor(public name = '') {} reset() {} }
-export class Texture2D {}
+export class SpriteFrame {
+    texture: any = null; packable = true; insetLeft = 0; insetRight = 0; insetTop = 0; insetBottom = 0;
+    constructor(public name = '') {}
+    reset() {}
+}
+/** Keeps the pixels a texture was made from, so the layout tool can paint them. */
+export class ImageAsset { constructor(public src: any = null) {} }
+export class Texture2D {
+    image: any = null;
+    setFilters() {} setWrapMode() {}
+    static PixelFormat = { RGBA8888: 35 };
+    static Filter = { NEAREST: 2, LINEAR: 1 };
+    static WrapMode = { CLAMP_TO_EDGE: 1, REPEAT: 0 };
+}
 export class TTFFont {}
 export class Font {}
 export class Sprite extends Component {
@@ -117,7 +129,20 @@ export class Label extends Component {
     }
     updateRenderData() { this.measure(); }
 }
-export class RichText extends Component { string = ''; fontSize = 40; lineHeight = 40; maxWidth = 0; horizontalAlign = 0; font: any = null; useSystemFont = true; fontColor = new Color(); }
+export class RichText extends Component {
+    private _s = ''; fontSize = 40; lineHeight = 40; maxWidth = 0; horizontalAlign = 0; font: any = null; useSystemFont = true; fontColor = new Color();
+    get string() { return this._s; }
+    /** Like Cocos: the node grows to the wrapped text (estimated glyph width 0.5 × size). */
+    set string(v: string) {
+        this._s = v;
+        const ut = this.node?.getComponent<UITransform>(UITransform);
+        if (!ut) return;
+        const plain = v.replace(/<[^>]+>/g, '');
+        const w = this.maxWidth || plain.length * this.fontSize * 0.5;
+        ut.width = w;
+        ut.height = Math.max(1, Math.ceil(plain.length * this.fontSize * 0.5 / Math.max(1, w))) * (this.lineHeight || this.fontSize);
+    }
+}
 export class Widget extends Component {
     isAlignTop = false; isAlignBottom = false; isAlignLeft = false; isAlignRight = false;
     top = 0; bottom = 0; left = 0; right = 0; alignMode = 0; updateAlignment() {}

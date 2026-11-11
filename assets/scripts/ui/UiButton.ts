@@ -7,29 +7,37 @@
 //  - While pressed, the face drops into its shadow, so the label drops with it.
 //  - Text can be set from code: button.text = 'Continue · Round 6'.
 //
-// The prefab holds the sprite frames once (Normal / Pressed / Disabled); every
-// instance only needs Style and Text.
+// Open-table style (plan phase 5): the frames come from ui/kitC.ts, made at runtime,
+// so they override any frames set on a prefab. Red = the main action (a red card);
+// Cream = the chosen option (a cream card); Dark and Blue = a cream outline;
+// not interactable = a quiet outline. Pressed = the card's darker step, no drop.
 
 import {
     _decorator, Component, Sprite, SpriteFrame, Button, Label, Color, Enum, Node, EventTouch,
 } from 'cc';
 import { Sound } from '../app/Sound';
+import { EDITOR } from 'cc/env';
+import { buttonFrame } from './kitC';
+import { ButtonLook } from './pixelart';
 const { ccclass, property, executeInEditMode, requireComponent } = _decorator;
 
 export enum ButtonStyle { Red, Cream, Blue, Dark }
 Enum(ButtonStyle);
 
-/** Text colour per style (sampled from the mockups). */
+/** Text colour per style (open table). */
 const TEXT_COLOR: Record<ButtonStyle, string> = {
-    [ButtonStyle.Red]: '#EFEEE4',
-    [ButtonStyle.Cream]: '#2B2438',
-    [ButtonStyle.Blue]: '#EFEEE4',
-    [ButtonStyle.Dark]: '#EFEEE4',
+    [ButtonStyle.Red]: '#ECECE0',
+    [ButtonStyle.Cream]: '#3B324A',
+    [ButtonStyle.Blue]: '#ECECE0',
+    [ButtonStyle.Dark]: '#ECECE0',
 };
-const DISABLED_TEXT = '#6B6577';
+const DISABLED_TEXT = '#6E6276';
+const LOOK: Record<ButtonStyle, ButtonLook> = {
+    [ButtonStyle.Red]: 'red', [ButtonStyle.Cream]: 'cream', [ButtonStyle.Blue]: 'outline', [ButtonStyle.Dark]: 'outline',
+};
 
-/** Shadow height in the button art: the face moves down this far when pressed. */
-const SHADOW = 7;
+/** The cards have no drop shadow: a press only darkens the card. */
+const SHADOW = 0;
 
 @ccclass('UiButton')
 @executeInEditMode
@@ -95,20 +103,24 @@ export class UiButton extends Component {
     applyStyle() {
         const sprite = this.getComponent(Sprite);
         const button = this.getComponent(Button);
-        const normal = this.normalFrames[this._style] ?? null;
-        const pressed = this.pressedFrames[this._style] ?? normal;
+        // In the editor, leave the prefab's own frames alone: runtime frames must never be saved into a prefab.
+        if (EDITOR) return;
+        const look = LOOK[this._style] ?? 'outline';
+        const normal = buttonFrame(look);
+        const pressed = buttonFrame(look, true);
+        const disabled = buttonFrame('muted');
         if (button) {
             button.transition = Button.Transition.SPRITE;
             button.normalSprite = normal;
             button.hoverSprite = normal;
             button.pressedSprite = pressed;
-            button.disabledSprite = this.disabledFrame ?? normal;
+            button.disabledSprite = disabled;
         }
         const enabled = button ? button.interactable : true;
         if (sprite) {
             sprite.type = Sprite.Type.SLICED;
             sprite.sizeMode = Sprite.SizeMode.CUSTOM;
-            sprite.spriteFrame = enabled ? normal : (this.disabledFrame ?? normal);
+            sprite.spriteFrame = enabled ? normal : disabled;
         }
         const label = this.labelComp;
         if (label) {

@@ -12,6 +12,10 @@ import { Hand } from '../core/evaluate';
 import { HandCategory } from '../core/hands';
 import { HealthGrid, healthCols } from '../core/health';
 import { UiKit, makeNode, makeSprite } from './UiKit';
+import { ringFrame, cellFrame, cellSpriteSize } from './kitC';
+
+/** Open-table pieces sit on whole art pixels: sizes rounded to even screen pixels. */
+const even = (n: number) => Math.round(n / 2) * 2;
 import { AnimatedCard } from './AnimatedCard';
 const { ccclass } = _decorator;
 
@@ -37,9 +41,10 @@ export class CardView extends Component {
     static create(parent: Node, card: Card, w: number, h: number, x: number, y: number): CardView {
         const kit = UiKit.get();
         const holder = makeNode(parent, `Card ${card.id}`, w, h, { x, y });
-        const pink = makeSprite(holder, 'Selected', kit.cardFramePink, w + 22, h + 22, {}, true).node;
+        // Open table: dotted rings, gold round a scoring card, pink (outside it) when picked or charging.
+        const pink = makeSprite(holder, 'Selected', ringFrame(w + 24, h + 24, 'pink'), even(w + 24), even(h + 24)).node;
         makeSprite(holder, 'Art', kit.cardFrame(card), w, h);
-        const gold = makeSprite(holder, 'InHand', kit.cardFrameGold, w + 10, h + 10, {}, true).node;
+        const gold = makeSprite(holder, 'InHand', ringFrame(w + 12, h + 12, 'gold'), even(w + 12), even(h + 12)).node;
         pink.active = false;
         gold.active = false;
         const view = holder.addComponent(CardView);
@@ -55,7 +60,7 @@ export class CardView extends Component {
 
 /** An empty card slot (dashed outline). */
 export function buildSlot(parent: Node, name: string, w: number, h: number, x: number, y: number): Node {
-    return makeSprite(parent, name, UiKit.get().slotFor(w), w, h, { x, y }).node;
+    return makeSprite(parent, name, ringFrame(w, h, 'slot'), even(w), even(h), { x, y }).node;
 }
 
 // ---- Hand text -----------------------------------------------------------------
@@ -94,6 +99,8 @@ export interface HealthGridParts {
     cells: Sprite[];
     width: number;
     height: number;
+    /** Cell size in screen pixels (the sprites carry a small margin of the art). */
+    cellSize?: number;
 }
 
 /**
@@ -103,12 +110,10 @@ export interface HealthGridParts {
 /** Their health grid has room for bigger cells (opponent panel). */
 export const THEIR_PITCH = 52;
 
-export function buildHealthGrid(parent: Node, health: HealthGrid | number, maxW: number, maxH: number, x: number, y: number, maxPitch = 36): HealthGridParts {
-    const kit = UiKit.get();
+export function buildHealthGrid(parent: Node, health: HealthGrid | number, maxW: number, maxH: number, x: number, y: number, maxPitch = 36, gapRatio = 0.2): HealthGridParts {
     const count = typeof health === 'number' ? health : health.cells.length;
     const cols = typeof health === 'number' ? healthCols(count) : health.cols;
     const rows = Math.ceil(count / cols);
-    const gapRatio = 0.2;
     const pitch = Math.min(maxPitch, Math.floor(maxW / (cols - gapRatio)), Math.floor(maxH / (rows - gapRatio)));
     const size = Math.max(4, Math.round(pitch * (1 - gapRatio)));
     const width = cols * pitch - (pitch - size);
@@ -117,32 +122,30 @@ export function buildHealthGrid(parent: Node, health: HealthGrid | number, maxW:
     const cells: Sprite[] = [];
     for (let i = 0; i < count; i++) {
         const r = Math.floor(i / cols), c = i % cols;
-        const cell = makeSprite(node, `Cell${i}`, kit.cellAlive, size, size, { x: c * pitch + size / 2, y: -(r * pitch + size / 2) });
-        // Shield (♦) or rot (♣) mark on top, hidden until needed.
-        const mark = makeSprite(cell.node, 'Mark', null, Math.round(size * 0.66), Math.round(size * 0.66));
-        mark.node.active = false;
+        // Open table: the cell's colour shows its state (red, green rotted, blue shielded, an empty outline when lost).
+        const cs = cellSpriteSize(size);
+        const cell = makeSprite(node, `Cell${i}`, cellFrame(size, 'alive'), cs, cs, { x: c * pitch + size / 2 + (cs - size) / 2, y: -(r * pitch + size / 2) - (cs - size) / 2 });
         cells.push(cell);
     }
-    const parts = { node, cells, width, height };
+    const parts = { node, cells, width, height, cellSize: size };
     if (typeof health !== 'number') paintHealth(parts, health);
     return parts;
 }
 
-/** Shows each cell's state: alive (♦ mark if shielded), lost, or rotted (♣ mark). */
+/** Shows each cell's state by its colour: alive, shielded, rotted, or lost. */
 export function paintHealth(parts: HealthGridParts, g: HealthGrid) {
-    const kit = UiKit.get();
+    const size = cellSizeOf(parts);
     g.cells.forEach((c, i) => {
         const sprite = parts.cells[i];
         if (!sprite) return;
-        sprite.spriteFrame = c.state === 'alive' ? kit.cellAlive : c.state === 'lost' ? kit.cellLost : kit.cellRotted;
-        const mark = sprite.node.getChildByName('Mark')?.getComponent(Sprite);
-        if (!mark) return;
-        const showShield = c.state === 'alive' && c.shield;
-        const showRot = c.state === 'rotted';
-        mark.node.active = showShield || showRot;
-        if (showShield) mark.spriteFrame = kit.suitIcon('D');
-        else if (showRot) mark.spriteFrame = kit.suitIcon('C');
+        const state = c.state === 'alive' ? (c.shield ? 'shield' : 'alive') : c.state === 'lost' ? 'lost' : 'rotted';
+        sprite.spriteFrame = cellFrame(size, state);
     });
+}
+
+/** The cell size a grid was built with (its sprites are a little bigger: the art's margin). */
+function cellSizeOf(parts: HealthGridParts): number {
+    return parts.cellSize ?? 24;
 }
 
 // ---- Mini board (opponent table) ---------------------------------------------------------
