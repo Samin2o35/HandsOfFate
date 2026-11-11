@@ -6,7 +6,9 @@ Makes the itch.io page images from the game's own art (run from the project root
 
   cover.png / cover.gif   630x500   store cover (the GIF animates the five cards on hover)
   banner.png              960x300   page header
-  embed_bg.png            450x800   behind itch's "Run game" button (middle left clear for it)
+  embed_bg.png            450x800   portrait embed (before landscape; kept for reference)
+  embed_bg_landscape.png  960x540   behind itch's "Run game" button, landscape embed (centre clear)
+  embed_bg_landscape@2x   1920x1080 the same, doubled, for a 1920x1080 embed
 
 Pixel Plebes terms: the cards are placed upright, whole, at exact scales (the 4x art
 halved to 2x), never rotated, recoloured or redrawn. Everything is composed at half
@@ -163,6 +165,35 @@ def embed_bg():
     return final
 
 
+# ---- Embed background 960x540 (landscape) ----------------------------------------------
+
+def embed_bg_landscape():
+    c = Image.new('RGBA', (480, 270), BG + (255,))
+    glow(c, 240, 135, 230, 120)
+    # Title plaque, top centre.
+    pw, ph = 216, 62
+    px, py = 240 - pw // 2, 18
+    plaque(c, px, py, pw, ph)
+    title_row(c, 240, py + 12)
+    # Two cards each side, low; the middle (about y 105-185) stays clear for Run game.
+    for x, y, strip in ((22, 128, 'anim/S_13'), (58, 116, 'anim/H_12')):
+        c.alpha_composite(Image.new('RGBA', (90, 126), SHADOW + (255,)), (x + 3, y + 3))
+        c.alpha_composite(card(strip), (x, y))
+    for x, y, strip in ((368, 128, 'anim/joker_true'), (332, 116, 'anim/C_11')):
+        c.alpha_composite(Image.new('RGBA', (90, 126), SHADOW + (255,)), (x + 3, y + 3))
+        c.alpha_composite(card(strip), (x, y))
+    # Suit pips under the button area.
+    pips = [icon(s) for s in 'SHCD']
+    x = 240 - (4 * 18 + 3 * 10) // 2
+    for i, p in enumerate(pips):
+        c.alpha_composite(p, (x + i * 28, 214))
+    final = double(c)
+    tagline(final, 480, (py + 40) * 2 + 2)
+    credit = text_img('VT323-Regular.ttf', 20, 'Card art: Pixel Plebes by Greebles (Devlyn JD)', LILAC)
+    final.alpha_composite(credit, (480 - credit.width // 2, 540 - 34))
+    return final
+
+
 def main():
     os.makedirs(OUT, exist_ok=True)
     frames = [cover(f) for f in range(FRAMES)]
@@ -174,7 +205,10 @@ def main():
                 duration=int(1000 / FPS), loop=0, optimize=False, disposal=1)
     banner().convert('RGB').save(os.path.join(OUT, 'banner.png'))
     embed_bg().convert('RGB').save(os.path.join(OUT, 'embed_bg.png'))
-    for n in ('cover.png', 'cover.gif', 'banner.png', 'embed_bg.png'):
+    land = embed_bg_landscape().convert('RGB')
+    land.save(os.path.join(OUT, 'embed_bg_landscape.png'))
+    double(land).save(os.path.join(OUT, 'embed_bg_landscape@2x.png'))
+    for n in ('cover.png', 'cover.gif', 'banner.png', 'embed_bg.png', 'embed_bg_landscape.png', 'embed_bg_landscape@2x.png'):
         p = os.path.join(OUT, n)
         print(f'{n:13s} {Image.open(p).size}  {os.path.getsize(p) // 1024} KB')
 

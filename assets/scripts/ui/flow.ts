@@ -10,11 +10,14 @@ import { Fight } from '../core/fight';
 import { Game } from '../app/Game';
 import { ScreenManager } from '../app/ScreenManager';
 import { cardWords } from './views';
+import { PlayLog } from '../app/PlayLog';
 
 export interface PlanningMessage { title: string; body: string; }
 
 export function finishRound(run: Run, fight: Fight): RoundResult {
+    const snap = PlayLog.snapshot(run);
     const result = run.finishFight(fight);
+    PlayLog.add(snap, fight, result);
     Game.recordProgress();
     const s = result.score;
     console.log(`Round ${result.round} ${result.won ? 'won' : 'lost'} vs ${result.opponent} in ${fight.time.toFixed(1)} s`, s);

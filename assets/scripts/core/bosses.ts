@@ -7,6 +7,7 @@ import { Suit, SUIT_SYMBOL } from './cards';
 import { Fight, FightEvent, FightModifier, FightSideSetup } from './fight';
 import { HealthGrid, cellIndexAt, createHealthGrid } from './health';
 import { Rng } from './rng';
+import { RULES } from './rules';
 
 export interface BossInfo {
     readonly suit: Suit;
@@ -24,17 +25,18 @@ export const BOSSES: Record<Suit, BossInfo> = {
 
 // ---- Numbers per tier (GDD "Per tier" column) ------------------------------
 
-export const EXECUTION_PERIOD = 8;
+/** Seconds between blades (RULES.executionPeriod, 8 today). */
+export const executionPeriod = () => RULES.executionPeriod;
 export const executionCells = (tier: number) => 1 + tier;
 export const secondWindHeal = (tier: number) => 2 + 2 * tier;
-export const blightPeriod = (tier: number) => Math.max(6, 12 - tier);
+export const blightPeriod = (tier: number) => Math.max(RULES.blightFloor, RULES.blightStart - tier);
 export const fortressShields = (tier: number) => 2 + 2 * tier;
 export const fortressArmorCharges = (tier: number) => tier;
 
 /** One sentence for the boss intro screen, for this tier. */
 export function twistText(suit: Suit, tier: number): string {
     switch (suit) {
-        case 'S': return `Every ${EXECUTION_PERIOD} s a blade hits your fullest health row, destroying ${executionCells(tier)} cells.`;
+        case 'S': return `Every ${executionPeriod()} s a blade hits your fullest health row, destroying ${executionCells(tier)} cells.`;
         case 'H': return `The first time he drops below half health, he heals ${secondWindHeal(tier)} cells. Once per fight.`;
         case 'C': return `Rotted cells on your grid spread to a neighbour every ${blightPeriod(tier)} s.`;
         case 'D': return `Starts with ${fortressShields(tier)} cells shielded and +${fortressArmorCharges(tier)} armor charges.`;
@@ -115,13 +117,13 @@ export function bossModifiers(suit: Suit, tier: number): FightModifier[] {
 
 /** ♠ Every 8 s a blade hits your health row with the most living cells. */
 export class Execution implements FightModifier {
-    private next = EXECUTION_PERIOD;
+    private next = executionPeriod();
     constructor(readonly tier: number) {}
 
     nextTime(): number { return this.next; }
 
     act(f: Fight): FightEvent | null {
-        this.next += EXECUTION_PERIOD;
+        this.next += executionPeriod();
         const g = f.player.health;
         let bestRow = -1, bestLiving = 0;
         for (let r = 0; r < g.rows; r++) {

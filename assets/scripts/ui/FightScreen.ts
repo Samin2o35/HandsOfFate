@@ -41,7 +41,7 @@ import { shake } from './fx';
 import { Suit } from '../core/cards';
 import { HandCategory } from '../core/hands';
 import { finishRound } from './flow';
-import { Sound } from '../app/Sound';
+import { Sound, Sfx } from '../app/Sound';
 import { tutorialStep, setTutorialStep, showTutorial } from './Tutorial';
 import { jokerLine, jokerSay } from './joker';
 import {
@@ -336,6 +336,8 @@ export class FightScreen extends GameScreen {
         this.inFlight++;
         this.lastLaunch = this.clock;
         let pending = sources.length;
+        // The throw sounds as the cards let go; the impact sound plays when it lands.
+        if (e.kind === 'hand') Sound.play(`throw_${suit}` as Sfx);
         sources.forEach((src, k) => launch(this.fx!, src, targets[k % targets.length], suit, () => {
             if (--pending === 0) this.land(e, diff, after, touched);
         }, e.kind === 'twist' ? 0.25 : 0));

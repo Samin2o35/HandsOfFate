@@ -5,6 +5,7 @@
 //   run      (the run in progress, if any)            -> "hof.run"
 // Screens read and change state through `Game`, never through localStorage directly.
 
+import { PlayLog } from './PlayLog';
 import { sys } from 'cc';
 import { Profile, newProfile, updateProfile, AceId } from '../core/achievements';
 import { Run } from '../core/run';
@@ -188,4 +189,11 @@ class GameState {
 export const Game = new GameState();
 
 // Handy while testing in the browser preview: type `hof.resetAll()` in the console.
+// `hof.playlog()` prints the playtest log (and copies it, where the browser allows).
 (globalThis as unknown as { hof: GameState }).hof = Game;
+(Game as unknown as { playlog: () => string }).playlog = () => {
+    const text = PlayLog.text();
+    try { void (globalThis as any).navigator?.clipboard?.writeText(text); } catch { /* not allowed here */ }
+    console.log(`${PlayLog.count()} rounds logged:`);
+    return text;
+};

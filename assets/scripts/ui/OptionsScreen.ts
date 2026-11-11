@@ -3,7 +3,7 @@
 // Opened from the title and from planning; Back returns to where you came from.
 // Sound: Music On/Off and Sound effects On/Off, saved in settings.
 
-import { _decorator, Node, UITransform, Widget } from 'cc';
+import { _decorator, Node, UITransform, Widget, tween } from 'cc';
 import { GameScreen } from './GameScreen';
 import { Game, SPEEDS, SPEED_NAME } from '../app/Game';
 import { ScreenManager } from '../app/ScreenManager';
@@ -11,6 +11,7 @@ import { Sound } from '../app/Sound';
 import { Smoke } from '../app/Smoke';
 import { UiKit, makeNode, makeLabel, makeButton, clearChildren, FONT } from './UiKit';
 import { frame, INK_TEXT } from './kitC';
+import { PlayLog } from '../app/PlayLog';
 import { ButtonStyle } from './UiButton';
 import { confirmBox } from './Modal';
 const { ccclass } = _decorator;
@@ -80,6 +81,27 @@ export class OptionsScreen extends GameScreen {
         };
         toggle('music', 'Music', 0);
         toggle('sfx', 'Effects', 1);
+
+        // Playtests: copy this device's log of every round played, to send back.
+        y -= 180;
+        sectionTitle('PlaytestTitle', 'PLAYTEST', leftX, y);
+        y -= 70;
+        const rounds = PlayLog.count();
+        const copyText = rounds ? `Copy playtest log (${rounds} rounds)` : 'Playtest log: nothing yet';
+        const copy = makeButton(root, 'CopyLog', ButtonStyle.Dark, copyText, colW, 100, { x: leftX, y }, () => {
+            const text = PlayLog.text();
+            const nav = (globalThis as any).navigator;
+            // The answer shows on the button itself for a moment.
+            const done = (ok: boolean) => {
+                copy.text = ok ? 'Copied: paste it in a message' : 'Printed in the console';
+                tween(copy.node).delay(2.5).call(() => { if (copy.isValid) copy.text = copyText; }).start();
+            };
+            try {
+                if (nav?.clipboard?.writeText) nav.clipboard.writeText(text).then(() => done(true), () => { console.log(text); done(false); });
+                else { console.log(text); done(false); }
+            } catch { console.log(text); done(false); }
+        }, 30);
+        copy.interactable = rounds > 0;
 
         // Right column: tutorial, motion, then progress.
         y = T - 240;

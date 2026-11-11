@@ -7,6 +7,7 @@ import { Grid, createGrid, gridFromText, setCard } from './grid';
 import { evaluateBoard } from './evaluate';
 import { EFFECT_OF_SUIT } from './hands';
 import { Rng } from './rng';
+import { RULES } from './rules';
 
 export interface StartingSetup {
     grid: Grid;
@@ -89,6 +90,14 @@ export function deckProblems(parts: DeckParts): string[] {
         if (Array.from(ranks).some((r) => ranks.has(r + 1) && ranks.has(r + 2))) problems.push('can make a straight flush');
     }
     if (parts.spare.rank === runRanks[0] - 1 || parts.spare.rank === runRanks[2] + 1) problems.push('spare extends the run to 4');
+
+    // Stricter decks (part of the 4-card flush package, core/rules.ts): the spare pairs
+    // with nothing, and no second 3-card run can be built from the other ranks.
+    if (RULES.strictDecks) {
+        if (all.filter((c) => c.rank === parts.spare.rank).length > 1) problems.push('spare matches another rank');
+        const others = new Set<number>([...pairRanks, parts.spare.rank]);
+        if (Array.from(others).some((r) => others.has(r + 1) && others.has(r + 2))) problems.push('a second 3-card run');
+    }
 
     // The dealt layout must be exactly 3 pairs + the straight (no flush lines, no extra straights).
     const result = evaluateBoard(layoutDeck(parts).grid);

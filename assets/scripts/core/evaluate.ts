@@ -12,7 +12,8 @@
 
 import { Card, Rank, Suit, SUITS, rankLabel, cardLabel, SUIT_SYMBOL } from './cards';
 import { Grid } from './grid';
-import { HAND_INFO, HandCategory, HitPattern, Effect, EFFECT_OF_SUIT, MIN_STRAIGHT, MIN_FLUSH } from './hands';
+import { HAND_INFO, HandCategory, HitPattern, Effect, EFFECT_OF_SUIT, MIN_STRAIGHT } from './hands';
+import { RULES } from './rules';
 
 export interface PlacedCard {
     readonly card: Card;
@@ -150,13 +151,14 @@ export function bestLineHand(line: readonly PlacedCard[]): Candidate | null {
         list.push(pc);
         bySuit.set(pc.card.suit, list);
     }
-    // A flush is the whole line in one suit (3+ cards). A straight flush is a
-    // straight (3+ run, may sit inside a longer line) whose cards share a suit.
-    const flushCards = cards.length >= MIN_FLUSH && bySuit.size === 1 ? cards : null;
+    // A flush is the whole line in one suit (RULES.minFlush+ cards, 3 today). A straight
+    // flush is a straight (a run of RULES.minStraightFlush+, may sit inside a longer line)
+    // whose cards share a suit.
+    const flushCards = cards.length >= RULES.minFlush && bySuit.size === 1 ? cards : null;
     let sf: ReturnType<typeof findRun> = null;
     for (const list of bySuit.values()) {
         const run = list.length >= MIN_STRAIGHT ? findRun(list) : null;
-        if (run && (!sf || run.cards.length > sf.cards.length)) sf = run;
+        if (run && run.cards.length >= RULES.minStraightFlush && (!sf || run.cards.length > sf.cards.length)) sf = run;
     }
 
     // Strongest first; the first one found wins.

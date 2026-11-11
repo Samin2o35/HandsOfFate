@@ -16,20 +16,23 @@ export type Sfx =
     | 'click' | 'deny' | 'select'
     | 'card_pick' | 'card_place' | 'card_return' | 'deal' | 'forge'
     | 'hit' | 'hurt' | 'rot' | 'block' | 'heal' | 'shield' | 'twist'
-    | 'win' | 'lose' | 'tick' | 'total' | 'boss' | 'ace' | 'dealer';
+    | 'win' | 'lose' | 'tick' | 'total' | 'boss' | 'ace' | 'dealer'
+    | 'throw_S' | 'throw_H' | 'throw_C' | 'throw_D';
 
 export type Music = 'menu' | 'fight' | 'boss';
 
 export const SFX_NAMES: readonly Sfx[] = [
     'click', 'deny', 'select', 'card_pick', 'card_place', 'card_return', 'deal', 'forge',
     'hit', 'hurt', 'rot', 'block', 'heal', 'shield', 'twist', 'win', 'lose', 'tick', 'total', 'boss', 'ace', 'dealer',
+    'throw_S', 'throw_H', 'throw_C', 'throw_D',
 ];
 export const MUSIC_NAMES: readonly Music[] = ['menu', 'fight', 'boss'];
 
-/** Per-sound loudness (0..1), to balance packs from different makers. Tune by ear. */
-const SFX_VOLUME: Partial<Record<Sfx, number>> = {
-    click: 0.6, select: 0.6, tick: 0.35, card_pick: 0.7, card_return: 0.6, hit: 0.7, hurt: 0.8, rot: 0.6, block: 0.6,
-};
+/**
+ * Per-sound trim (0..1). The sounds are made by tools/audio/make_sfx.py with their
+ * loudness already balanced (its LOUDNESS table), so these are only for tuning by ear.
+ */
+const SFX_VOLUME: Partial<Record<Sfx, number>> = {};
 const MUSIC_VOLUME = 0.45;
 const FADE_PER_SECOND = 1.5;   // music fades in or out in about 0.3 s
 const MIN_GAP = 0.045;         // the same sound plays at most once per 45 ms (a flush can fire 8 cells at once)

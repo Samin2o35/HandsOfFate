@@ -13,6 +13,7 @@ import { evaluateBoard } from './evaluate';
 import { HealthGrid, createHealthGrid } from './health';
 import { Rng } from './rng';
 import { bossHealth } from './bosses';
+import { RULES } from './rules';
 
 // ---- Scaling numbers (starting values to tune in playtests) --------------------
 
@@ -21,8 +22,7 @@ export const BUDGET_SPREAD = 0.1;
 export const healthFor = (round: number) => Math.min(60, 10 + 2 * round);
 export const fillFor = (round: number) => Math.min(1, 0.6 + 0.04 * round);
 export const BOSS_EVERY = 5;
-export const BOSS_BUDGET_MULT = 1.3;
-export const BOSS_EXTRA_HEALTH = 10;
+/** Kings' extra budget and health live in core/rules.ts (RULES.bossBudgetMult, bossExtraHealth). */
 
 /** Columns × rows. Mockup round 7: a table 3 wide, 4 tall. */
 export function gridSizeFor(round: number): { cols: number; rows: number } {
@@ -81,14 +81,14 @@ export function generateOpponent(round: number, rng: Rng, options: OpponentOptio
     }
 
     const spread = 1 - BUDGET_SPREAD + rng.next() * 2 * BUDGET_SPREAD;
-    const budget = Math.round(budgetFor(round) * spread * (boss ? BOSS_BUDGET_MULT : 1));
+    const budget = Math.round(budgetFor(round) * spread * (boss ? RULES.bossBudgetMult : 1));
     const { cols, rows } = gridSizeFor(round);
     const grid = buildTable(rng, rows, cols, Math.round(rows * cols * fillFor(round)), avatar.suit, budget);
     // Opponent cards get ids -1, -2, ... in reading order: never confused with
     // yours, and the same every time for the same seed.
     let id = 0;
     grid.slots = grid.slots.map((c) => (c ? { id: --id, suit: c.suit, rank: c.rank } : null));
-    const healthCells = healthFor(round) + (boss ? BOSS_EXTRA_HEALTH : 0);
+    const healthCells = healthFor(round) + (boss ? RULES.bossExtraHealth : 0);
 
     return {
         round, avatar, grid, healthCells, budget, boss,

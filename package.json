@@ -13,8 +13,11 @@
     "serve": "node tools/serve.mjs",
     "serve-single": "node tools/serve.mjs build/single",
     "itch-zip": "node tools/itch-zip.mjs",
-    "itch-art": "python tools/art/make_itch_art.py",
-    "layout": "node tools/layout/run-all.mjs"
+    "itch-art": "python3 tools/art/make_itch_art_c.py",
+    "layout": "node tools/layout/run-all.mjs",
+    "playlog": "tsx tools/playlog.ts",
+    "sfx": "python3 tools/audio/make_sfx.py",
+    "music": "python3 tools/audio/make_music.py"
   },
   "devDependencies": {
     "@babel/core": "^7.29.13",
