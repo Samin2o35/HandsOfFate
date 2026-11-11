@@ -18,12 +18,15 @@ import { UiKit, makeNode, makeSprite, makeLabel, makeButton, clearChildren, FONT
 import { ButtonStyle, UiButton } from './UiButton';
 import { CardView, CARD_W, CARD_H, cardWords } from './views';
 import { tableRegions, buildStrip, buildJoker, GREY } from './table';
-import { frame, rewardIcon, INK_TEXT } from './kitC';
+import { frame, rewardIcon, ringFrame, INK_TEXT } from './kitC';
 import { PlanningMessage } from './flow';
 import { tutorialStep, setTutorialStep, showTutorial } from './Tutorial';
 import { celebrateAces } from './Modal';
 import { jokerLine } from './joker';
 const { ccclass } = _decorator;
+
+/** Height of a reward card. */
+const REWARD_H = 250;
 
 
 @ccclass('RoundWonScreen')
@@ -75,11 +78,13 @@ export class RoundWonScreen extends GameScreen {
         // Right: the two steps, then Next round at the bottom right.
         const left = g.L + tabW + 60, w = g.R - left;
         const took = this.takeId !== null;
-        const takeBottom = this.buildTake(root, run, left, w, top);
-        const stepTop = takeBottom - 40;
-        makeLabel(root, 'Step2', '2  Then choose a reward', { size: FONT.heading + 9, color: took ? GREY.text : GREY.dim, align: 'left', x: left, y: stepTop - 24 });
-        this.buildRewards(root, run, left, w, stepTop - 70, took);
+        // Step 2 sits low, just above Next round; step 1's cards get the room between (Stage C, decision 150).
         const nextW = 420, nextH = 100;
+        const rewardsTop = bottom + nextH + 30 + REWARD_H;
+        const stepTop = rewardsTop + 70;
+        this.buildTake(root, run, left, w, top, top - 100 - (stepTop + 30));
+        makeLabel(root, 'Step2', '2  Then choose a reward', { size: FONT.heading + 9, color: took ? GREY.text : GREY.dim, align: 'left', x: left, y: stepTop - 24 });
+        this.buildRewards(root, run, left, w, rewardsTop, took);
         this.next = makeButton(root, 'Next', ButtonStyle.Red, 'Next round', nextW, nextH, { x: g.R - nextW / 2, y: bottom + nextH / 2 }, () => this.goNext());
         this.refreshNext();
     }
@@ -90,8 +95,9 @@ export class RoundWonScreen extends GameScreen {
         const s = r.score;
         const tab = frame(root, 'Tab', w, h, { x: left + w / 2, y: top - h / 2 }, { caption: 'THE TAB' });
         const x0 = -w / 2 + 32, x1 = w / 2 - 32;
-        makeLabel(tab, 'Title', `ROUND ${r.round}`, { size: FONT.heading, spacing: 2, color: GREY.text, align: 'left', x: x0, y: h / 2 - 44 });
-        const lineTop = h / 2 - 110;
+        // Bigger than before (Stage C, decision 150): names 30, details 30, values 39.
+        makeLabel(tab, 'Title', `ROUND ${r.round}`, { size: FONT.heading + 9, spacing: 2, color: GREY.text, align: 'left', x: x0, y: h / 2 - 48 });
+        const lineTop = h / 2 - 124, pitch = 84;
         const rows: [string, string, string][] = [
             ['Hands fired', `${s.handsFired} hands`, `+${s.handBonus}`],
             ['Health left', `${s.cellsLeft} / ${s.cellsTotal}`, `+${s.healthBonus}`],
@@ -101,15 +107,15 @@ export class RoundWonScreen extends GameScreen {
         const nodes: Node[] = [];
         const line = (name: string, detail: string, value: string, y: number, valueColor: string = GREY.text) => {
             const row = makeNode(tab, name, 0, 0, { y });
-            makeLabel(row, 'Name', name, { size: FONT.label, color: GREY.text, align: 'left', x: x0, y: 12 });
-            if (detail) makeLabel(row, 'Detail', detail, { font: 'body', size: 26, color: GREY.soft, align: 'left', x: x0, y: -16 });
-            makeLabel(row, 'Value', value, { size: FONT.heading - 3, color: valueColor, align: 'right', x: x1, y: 0 });
+            makeLabel(row, 'Name', name, { size: 30, color: GREY.text, align: 'left', x: x0, y: detail ? 14 : 0 });
+            if (detail) makeLabel(row, 'Detail', detail, { font: 'body', size: 30, color: GREY.soft, align: 'left', x: x0, y: -20 });
+            makeLabel(row, 'Value', value, { size: FONT.heading + 6, color: valueColor, align: 'right', x: x1, y: 0 });
             nodes.push(row);
         };
-        rows.forEach(([name, detail, value], i) => line(name, detail, value, lineTop - i * 76));
-        const subY = lineTop - 4 * 76;
+        rows.forEach(([name, detail, value], i) => line(name, detail, value, lineTop - i * pitch));
+        const subY = lineTop - 4 * pitch + 10;
         line('Subtotal', '', s.subtotal.toLocaleString('en-US'), subY);
-        line(`Round ${r.round} multiplier`, '', `× ${s.multiplier.toFixed(1)}`, subY - 56, '#C93038');
+        line(`Round ${r.round} multiplier`, '', `× ${s.multiplier.toFixed(1)}`, subY - 62, '#C93038');
 
         const totalBox = frame(tab, 'TotalBox', w - 40, 100, { y: -h / 2 + 20 + 50 }, { closed: true });
         makeLabel(totalBox, 'Title', 'ROUND TOTAL', { size: FONT.label + 3, spacing: 2, color: GREY.text, align: 'left', x: -(w - 40) / 2 + 20 });
@@ -133,19 +139,19 @@ export class RoundWonScreen extends GameScreen {
 
     // ---- 1. Take a card ---------------------------------------------------------------
 
-    /** The largest card size whose rows fit in maxH; returns the scale and cards per row. */
+    /** The largest card size that fits their cards in at most two rows and maxH (decision 150). */
     private takeLayout(count: number, w: number, maxH: number): { scale: number; perRow: number; rows: number } {
-        for (const scale of [1.5, 1, 0.75]) {
+        for (const scale of [1.5, 1.25, 1, 0.75]) {
             const gap = scale >= 1.5 ? 16 : 12;
             const perRow = Math.max(1, Math.floor((w + gap) / (CARD_W * scale + gap)));
             const rows = Math.ceil(count / perRow);
-            if (rows * (CARD_H * scale + gap) - gap <= maxH) return { scale, perRow, rows };
+            if (rows <= 2 && rows * (CARD_H * scale + gap) - gap <= maxH) return { scale, perRow, rows };
         }
-        const perRow = Math.max(1, Math.floor((w + 12) / (CARD_W * 0.5 + 12)));
+        const perRow = Math.max(1, Math.ceil(count / 2));
         return { scale: 0.5, perRow, rows: Math.ceil(count / perRow) };
     }
 
-    private buildTake(root: Node, run: Run, left: number, w: number, top: number): number {
+    private buildTake(root: Node, run: Run, left: number, w: number, top: number, maxH: number): number {
         const cards = run.takeableCards();
         const took = this.takeId !== null;
         makeLabel(root, 'Step1', '1  Take one of their cards', { size: FONT.heading + 9, color: GREY.text, align: 'left', x: left, y: top - 24 });
@@ -153,7 +159,7 @@ export class RoundWonScreen extends GameScreen {
         makeLabel(root, 'Step1Note', picked ? `Taking the ${cardWords(picked)}: it goes to your stash.` : 'It goes to your stash.',
             { font: 'body', size: FONT.bodySmall, color: took ? COLOR.gold : GREY.soft, align: 'left', x: left, y: top - 66 });
         const cardsTop = top - 100;
-        const { scale, perRow } = this.takeLayout(cards.length, w, 300);
+        const { scale, perRow } = this.takeLayout(cards.length, w, maxH);
         const cw = CARD_W * scale, ch = CARD_H * scale, gap = scale >= 1.5 ? 16 : 12;
         let bottom = cardsTop;
         cards.forEach((card, i) => {
@@ -179,7 +185,7 @@ export class RoundWonScreen extends GameScreen {
     private buildRewards(root: Node, run: Run, left: number, w: number, top: number, open: boolean) {
         const kit = UiKit.get();
         const options = run.rewardOptions();
-        const gap = 24, h = 250;
+        const gap = 24, h = REWARD_H;
         const cw = Math.min(360, (w - gap * 2) / 3);
         const specs = [
             { kind: 'health' as const, badge: `+${HEALTH_REWARD}`, title: 'Health', color: GREY.text, text: `+${HEALTH_REWARD} cells on your health grid`, full: 'Health is full' },
@@ -204,7 +210,10 @@ export class RoundWonScreen extends GameScreen {
             const titleY = iconY - (twoButtons ? 54 : 60), textY = iconY - (twoButtons ? 86 : 96);
             // Health and Grid are drawn pictures with their own greyed version. The Cards reward
             // shows the deck's backs, which are never tinted: a dark cover goes over them instead.
-            if (spec.kind !== 'cards') {
+            if (twoButtons) {
+                // + Row and + Col are cards of their own, each with your board in small and a dotted ghost where it grows.
+                this.buildGrowTiles(cardNode, run, cw, h);
+            } else if (spec.kind !== 'cards') {
                 const icon = rewardIcon(spec.kind, live);
                 makeSprite(cardNode, 'Icon', icon.frame, icon.w, icon.h, { y: iconY });
             } else {
@@ -216,26 +225,50 @@ export class RoundWonScreen extends GameScreen {
                     }
                 });
             }
-            makeLabel(cardNode, 'Title', spec.title, { size: FONT.heading, color: selected ? INK_TEXT.ink : live ? spec.color : GREY.dim, y: titleY });
-            if (twoButtons) makeLabel(cardNode, 'Text', 'Add a row or a column', { font: 'body', size: 26, color: inkSoft, y: textY, width: cw - 30, height: 28 });
-            else makeLabel(cardNode, 'Text', opt.available ? spec.text : spec.full, { font: 'body', size: 26, color: inkSoft, y: textY, width: cw - 30, height: 56, anchorY: 1 });
+            makeLabel(cardNode, 'Title', spec.title, { size: FONT.heading, color: selected ? INK_TEXT.ink : live ? spec.color : GREY.dim, y: twoButtons ? h / 2 - 34 : titleY });
+            if (!twoButtons) makeLabel(cardNode, 'Text', opt.available ? spec.text : spec.full, { font: 'body', size: 26, color: inkSoft, y: textY, width: cw - 30, height: 56, anchorY: 1 });
 
             // Step 2 waits for step 1: shown, but greyed and not clickable.
             if (!live) return;
             if (spec.kind === 'grid') {
                 const dirs = opt.directions ?? [];
-                if (dirs.length === 2) {
-                    const bw = (cw - 52) / 2;
-                    (['row', 'col'] as const).forEach((dir, k) => {
-                        const isOn = this.choice?.kind === 'grid' && this.choice.add === dir;
-                        makeButton(cardNode, `Grid ${dir}`, isOn ? ButtonStyle.Cream : ButtonStyle.Dark, dir === 'row' ? '+ Row' : '+ Col', bw, 64, { x: -cw / 2 + 20 + bw / 2 + k * (bw + 12), y: -h / 2 + 46 }, () => this.choose({ kind: 'grid', add: dir }), 24);
-                    });
-                    return;
-                }
+                if (dirs.length === 2) return; // the tiles take the taps
                 cardNode.on(Node.EventType.TOUCH_END, () => this.choose({ kind: 'grid', add: dirs[0] }));
                 return;
             }
             cardNode.on(Node.EventType.TOUCH_END, () => this.choose(spec.kind === 'health' ? { kind: 'health' } : { kind: 'cards' }));
+        });
+    }
+
+    /**
+     * The Grid reward's two choices: "+ Row" and "+ Col" as small cards. The chosen one is
+     * cream, the other an outline. Each shows your board as little cells, with the row or
+     * column it would add as dotted ghosts (decision 150).
+     */
+    private buildGrowTiles(cardNode: Node, run: Run, cw: number, h: number) {
+        const g = run.grid;
+        const tw = Math.floor((cw - 52) / 2 / 2) * 2, th = 160;
+        (['row', 'col'] as const).forEach((dir, k) => {
+            const on = this.choice?.kind === 'grid' && this.choice.add === dir;
+            const x = -cw / 2 + 20 + tw / 2 + k * (tw + 12), y = -h / 2 + 18 + th / 2;
+            const tile = frame(cardNode, `Grow ${dir}`, tw, th, { x, y }, { closed: true, fill: on ? 'cream' : undefined });
+            const rows = g.rows + (dir === 'row' ? 1 : 0), cols = g.cols + (dir === 'col' ? 1 : 0);
+            // Little cells: 2 px gaps, card-shaped, sized to fit the tile above its label.
+            const cwid = Math.max(8, Math.min(20, Math.floor(((tw - 36) - 4 * (cols - 1)) / cols / 2) * 2));
+            const chei = Math.max(10, Math.min(Math.floor(cwid * 1.4 / 2) * 2, Math.floor(((th - 70) - 4 * (rows - 1)) / rows / 2) * 2));
+            const gw = cols * cwid + (cols - 1) * 4, gh = rows * chei + (rows - 1) * 4;
+            const ox = -gw / 2 + cwid / 2, oy = th / 2 - 18 - chei / 2 - Math.max(0, (th - 70 - gh) / 2);
+            for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+                const ghost = r >= g.rows || c >= g.cols;
+                const at = { x: ox + c * (cwid + 4), y: oy - r * (chei + 4) };
+                if (ghost) makeSprite(tile, `Ghost ${r},${c}`, ringFrame(cwid, chei, on ? 'pink' : 'gold'), cwid, chei, at);
+                else {
+                    const cell = makeSprite(tile, `Cell ${r},${c}`, UiKit.get().spark, cwid, chei, at);
+                    cell.color = new Color().fromHEX(on ? INK_TEXT.ink : GREY.soft);
+                }
+            }
+            makeLabel(tile, 'Label', dir === 'row' ? '+ Row' : '+ Col', { size: FONT.label + 2, color: on ? INK_TEXT.ink : GREY.text, y: -th / 2 + 24 });
+            tile.on(Node.EventType.TOUCH_END, () => this.choose({ kind: 'grid', add: dir }));
         });
     }
 

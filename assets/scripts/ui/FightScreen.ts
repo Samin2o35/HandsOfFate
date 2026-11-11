@@ -26,6 +26,8 @@ import { Run } from '../core/run';
 import { Fight, FightEvent, HandState, SideId } from '../core/fight';
 import { HealthGrid, cloneHealthGrid } from '../core/health';
 import { applyEffect } from '../core/patterns';
+import { Hand, evaluateBoard } from '../core/evaluate';
+import { showTheirTable } from './TheirTable';
 import { EFFECT_CHARGES } from '../core/hands';
 import { scoreRound, formatTime } from '../core/scoring';
 import { UiKit, makeNode, makeSprite, makeLabel, makeButton, clearChildren, FONT } from './UiKit';
@@ -186,7 +188,14 @@ export class FightScreen extends GameScreen {
 
         // Right: the opponent, their health large; speed buttons under it.
         const cooldown = new Map(f.enemy.hands.map((h) => [h.hand.id, h.cooldown] as [string, number]));
-        const panel = buildOpponentPanel(root, g.opponent, run.opponent, f.enemy.hands.map((h) => h.hand), (h) => cooldown.get(h.id) ?? h.cooldown, this.view!.enemy);
+        const cooldownOf = (h: Hand) => cooldown.get(h.id) ?? h.cooldown;
+        // "View their table": the fight pauses while the pop-up is open (Stage C, decision 149).
+        const viewTable = () => {
+            if (this.paused || this.ending) return;
+            this.paused = true;
+            showTheirTable(this.node, run, run.opponent, evaluateBoard(run.opponent.grid), cooldownOf, () => { this.paused = false; });
+        };
+        const panel = buildOpponentPanel(root, g.opponent, run.opponent, f.enemy.hands.map((h) => h.hand), cooldownOf, this.view!.enemy, viewTable);
         this.theirLine = panel.lines;
         this.avatar = panel.avatar;
         this.theirs = panel.health;

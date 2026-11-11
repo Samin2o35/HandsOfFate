@@ -116,6 +116,8 @@ async function main() {
             if (process.env.FILL) fill(run, Number(process.env.FILL)); // e.g. FILL=5 with "boss 10"
             if (process.env.SPEED) (Game as any).settings.speed = process.env.SPEED;
             if (a1 === 'tut' && Number(a2) >= 3) fill(run, 3);
+            // STASH=n adds n more cards to the stash (copies of board cards); PAIRS=1 adds a second forgeable pair.
+            if (process.env.STASH) { const on = grid.cardsOnGrid(run.data.grid); for (let i = 0; i < Number(process.env.STASH); i++) run.data.stash.push({ ...on[i % on.length], id: 7000 + i }); }
             (Game as any).run = run;
             params = { run };
         }
@@ -137,7 +139,15 @@ async function main() {
             if (process.env.TOOK !== '1') comp.choice = { kind: process.env.TOOK };
             comp.build();
         }
-        if (screen === 'Planning' && process.env.FORGE) { comp.forgeOpen = true; await new Promise((r) => setTimeout(r, 20)); comp.rebuild(); }
+        // FORGE=1 or DRAWER=forge|stash opens a drawer; VIEW=1 opens their table pop-up.
+        if (screen === 'Planning' && (process.env.FORGE || process.env.DRAWER)) { comp.drawer = process.env.DRAWER ?? 'forge'; await new Promise((r) => setTimeout(r, 20)); comp.rebuild(); }
+        if ((screen === 'Planning' || screen === 'Fight') && process.env.VIEW) {
+            await new Promise((r) => setTimeout(r, 20));
+            const run = params.run;
+            const { showTheirTable } = await import('../../assets/scripts/ui/TheirTable');
+            const { evaluateBoard } = await import('../../assets/scripts/core/evaluate');
+            showTheirTable(host, run, run.opponent, evaluateBoard(run.opponent.grid), (h: any) => h.cooldown * run.opponent.cooldownMultiplier);
+        }
         if (process.env.FRAMES && screen === 'Fight') {
             // Stop part-way through a fight (tweens finish at once), for mockups.
             const cc: any = await import('cc');

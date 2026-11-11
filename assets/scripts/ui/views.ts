@@ -58,9 +58,9 @@ export class CardView extends Component {
     setSelected(on: boolean) { if (this.pink) this.pink.active = on; }
 }
 
-/** An empty card slot (dashed outline). */
+/** An empty card slot: a dotted cream outline, clear on the smoke (Stage C, decision 152). A card covers it. */
 export function buildSlot(parent: Node, name: string, w: number, h: number, x: number, y: number): Node {
-    return makeSprite(parent, name, ringFrame(w, h, 'slot'), even(w), even(h), { x, y }).node;
+    return makeSprite(parent, name, ringFrame(w, h, 'cream'), even(w), even(h), { x, y }).node;
 }
 
 // ---- Hand text -----------------------------------------------------------------

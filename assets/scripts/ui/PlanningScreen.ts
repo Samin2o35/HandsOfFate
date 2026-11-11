@@ -21,6 +21,7 @@ import { UiKit, makeNode, makeSprite, makeLabel, makeButton, clearChildren, FONT
 import { ButtonStyle } from './UiButton';
 import { BoardView, worldRect, unionRects } from './BoardView';
 import { ForgeView } from './ForgeView';
+import { showTheirTable } from './TheirTable';
 import { cardWords } from './views';
 import { finishRound, PlanningMessage } from './flow';
 import { tutorialStep, setTutorialStep, finishTutorial, showTutorial, suitLegend } from './Tutorial';
@@ -45,7 +46,9 @@ export class PlanningScreen extends GameScreen {
     /** A tapped hand (list line or badge): its cards get the pink ring. */
     private pickedHand: string | null = null;
     private message: { title: string; body: string } | null = null;
-    private forgeOpen = false;
+    /** The drawer over the opponent panel: the Forge or the whole stash (Stage C). */
+    private drawer: 'forge' | 'stash' | null = null;
+    private get forgeOpen() { return this.drawer === 'forge'; }
     private content: Node | null = null;
     private dragLayer: Node | null = null;
     private board: BoardView | null = null;
@@ -94,13 +97,16 @@ export class PlanningScreen extends GameScreen {
         const cells = run.data.healthCells;
         const healthH = Math.max(168, Math.ceil(cells / healthCols(cells)) * 34 + 66);
 
+        const o = g.opponent;
         const board = this.board = new BoardView(root, this.dragLayer!, run, {
             left: g.board.left, top: g.board.top, width: g.board.width, height: g.board.height,
             stashLeft: side.left, stashTop, stashWidth: side.width, stashHeight: STASH_H,
+            drawer: this.drawer === 'stash' ? { left: o.left, top: o.top, width: o.width, height: o.height } : undefined,
         }, {
             changed: (id) => this.changed(id),
             selected: (card) => { this.selected = card; this.pickedHand = null; this.message = null; this.refreshSelection(); },
             badge: (id) => this.pickHand(id),
+            stashDrawer: () => this.toggleDrawer('stash'),
         }, this.selected?.id ?? null);
         // His line when there's no round news (none during the tutorial: the Dealer is talking).
         const moment: Moment = this.forgeOpen ? 'forge' : run.opponent.boss ? 'king' : run.round === 1 ? 'newRun' : 'planning';
@@ -113,9 +119,9 @@ export class PlanningScreen extends GameScreen {
         this.entries = list.entries;
         this.healthNode = buildHealthBlock(root, side.left, list.bottom - 22, side.width, cells).grid.node;
 
-        // The Forge drawer takes the opponent's place while it's open.
-        if (this.forgeOpen) this.buildForgeDrawer(root, run, g);
-        else this.buildOpponent(root, run, g);
+        // A drawer (the Forge or the stash) takes the opponent's place while it's open.
+        if (this.drawer === 'forge') this.buildForgeDrawer(root, run, g);
+        else if (this.drawer !== 'stash') this.buildOpponent(root, run, g);
         this.buildActions(root, run, g);
         this.refreshSelection(false);
 
@@ -129,7 +135,10 @@ export class PlanningScreen extends GameScreen {
 
     private buildOpponent(root: Node, run: Run, g: TableRegions) {
         const o = run.opponent;
-        buildOpponentPanel(root, g.opponent, o, evaluateBoard(o.grid).hands, (h) => h.cooldown * o.cooldownMultiplier, opponentHealth(o));
+        const cooldownOf = (h: Hand) => h.cooldown * o.cooldownMultiplier;
+        const result = evaluateBoard(o.grid);
+        buildOpponentPanel(root, g.opponent, o, result.hands, cooldownOf, opponentHealth(o),
+            () => showTheirTable(this.node, run, o, result, cooldownOf));
     }
 
     private buildActions(root: Node, run: Run, g: TableRegions) {
@@ -152,12 +161,12 @@ export class PlanningScreen extends GameScreen {
         const drawer = frame(root, 'ForgeDrawer', r.width, r.height, { x: r.left + r.width / 2, y: r.top - r.height / 2 }, { caption: 'THE FORGE' });
         const x0 = -r.width / 2 + 30;
         makeLabel(drawer, 'What', 'Two identical cards become one better card. Once per round.', { font: 'body', size: 30, color: GREY.soft, align: 'left', x: x0, y: r.height / 2 - 70, width: r.width - 60, height: 40 });
-        makeLabel(drawer, 'Tip', 'Tap one of the pair on your board to pick which pair.', { font: 'body', size: 27, color: GREY.dim, align: 'left', x: x0, y: -r.height / 2 + 50, width: r.width - 60, height: 36 });
+        makeLabel(drawer, 'Tip', 'Pick a pair above, or tap one of its cards on your board.', { font: 'body', size: 27, color: GREY.dim, align: 'left', x: x0, y: -r.height / 2 + 50, width: r.width - 60, height: 36 });
         rule(drawer, 'Rule', r.width - 60, x0, -r.height / 2 + 90);
-        this.forge = new ForgeView(drawer, run, this.selected?.id ?? null, 0, 20, r.width - 60, 380, (made) => {
+        this.forge = new ForgeView(drawer, run, this.selected?.id ?? null, 0, 0, r.width - 60, 500, (made) => {
             if (tutorialStep() === 6) finishTutorial();
             this.selected = made;
-            this.forgeOpen = false;
+            this.drawer = null;
             this.message = { title: `Forged the ${cardWords(made)}`, body: 'The two cards became one. Done for this round.' };
             Sound.play('forge');
             this.changed(made.id);
@@ -166,8 +175,10 @@ export class PlanningScreen extends GameScreen {
 
     // ---- Actions ----------------------------------------------------------------
 
-    private toggleForge() {
-        this.forgeOpen = !this.forgeOpen;
+    private toggleForge() { this.toggleDrawer('forge'); }
+
+    private toggleDrawer(which: 'forge' | 'stash') {
+        this.drawer = this.drawer === which ? null : which;
         this.rebuild();
     }
 
@@ -267,7 +278,7 @@ export class PlanningScreen extends GameScreen {
 
     private startRound() {
         const run = this.run!;
-        this.forgeOpen = false;
+        this.drawer = null;
         Game.saveRun();
         if (ScreenManager.show('Fight', { run })) return;
         // No fight screen in ScreenManager: play the round instantly.

@@ -12,6 +12,11 @@ import { ForgeUpgrade, forgeUpgrades, mergeablePairs } from '../core/forge';
 import { UiKit, makeSprite, makeLabel, makeButton, makeNode, FONT } from './UiKit';
 import { ButtonStyle } from './UiButton';
 import { GREY } from './table';
+import { ringFrame } from './kitC';
+import { Sound } from '../app/Sound';
+
+/** "7S": rank and suit, which is what makes two cards a pair. */
+function kindOf(c: Card): string { return `${c.rank}${c.suit}`; }
 
 export class ForgeView {
     readonly root: Node;
@@ -35,13 +40,29 @@ export class ForgeView {
     setSelected(cardId: number | null) {
         if (cardId === this.selectedId) return;
         this.selectedId = cardId;
+        this.pickedKind = null;
         this.picking = false;
         this.build();
     }
 
+    /** A pair picked from the thumbnails ("7S"), which wins over the selected card's pair. */
+    private pickedKind: string | null = null;
+
+    /** One pair per kind of card (three 7♠ still make one choice). */
+    private pairs(): [Card, Card][] {
+        const seen = new Set<string>();
+        return mergeablePairs(this.run.ownedCards()).filter(([a]) => {
+            const k = kindOf(a);
+            if (seen.has(k)) return false;
+            seen.add(k);
+            return true;
+        });
+    }
+
     private pair(): [Card, Card] | null {
-        const pairs = mergeablePairs(this.run.ownedCards());
-        return pairs.find(([a, b]) => a.id === this.selectedId || b.id === this.selectedId) ?? pairs[0] ?? null;
+        const pairs = this.pairs();
+        return pairs.find(([a]) => kindOf(a) === this.pickedKind)
+            ?? pairs.find(([a, b]) => a.id === this.selectedId || b.id === this.selectedId) ?? pairs[0] ?? null;
     }
 
     private build() {
@@ -63,6 +84,23 @@ export class ForgeView {
             makeSprite(this.root, 'CardA', kit.cardFrame(pair[0]), mw, mh, { x: -mw / 2 - 30, y: cardsY });
             makeLabel(this.root, 'Plus', '+', { size: 66, color: GREY.text, x: 0, y: cardsY });
             makeSprite(this.root, 'CardB', kit.cardFrame(pair[1]), mw, mh, { x: mw / 2 + 30, y: cardsY });
+        }
+
+        // More than one pair: a row of thumbnails to choose from, the chosen one ringed gold (Stage C, decision 151).
+        const all = this.pairs();
+        if (usable && pair && all.length > 1) {
+            const tw = 45, th = 63, step = Math.min(tw + 18, Math.floor((w - 48 + 6) / all.length));
+            const rowW = all.length * step - (step - tw);
+            const ty = cardsY - mh / 2 - 34 - th / 2;
+            makeLabel(this.root, 'PairsTitle', 'YOUR PAIRS', { size: FONT.labelSmall, color: GREY.soft, align: 'left', x: left, y: ty + th / 2 + 16 });
+            all.forEach(([a], i) => {
+                const x = -rowW / 2 + tw / 2 + i * step;
+                const on = kindOf(a) === kindOf(pair[0]);
+                const t = makeNode(this.root, `Pair ${kindOf(a)}`, tw + 12, th + 12, { x, y: ty });
+                if (on) makeSprite(t, 'Ring', ringFrame(tw + 12, th + 12, 'gold'), tw + 12, th + 12);
+                makeSprite(t, 'Card', kit.cardFrame(a), tw, th);
+                t.on(Node.EventType.TOUCH_END, () => { Sound.play('select'); this.pickedKind = kindOf(a); this.picking = false; this.build(); });
+            });
         }
 
         const areaLeft = left;

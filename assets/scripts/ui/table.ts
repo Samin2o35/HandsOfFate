@@ -107,11 +107,13 @@ export function buildStrip(root: Node, g: TableRegions, round: number, phase: st
     const y = g.T - 56;
     const left = g.L - 14;
     makeLabel(root, 'RoundWord', 'ROUND', { size: 22, color: GREY.text, align: 'left', x: g.L + 8, y });
-    makeLabel(root, 'Round', String(round), { size: 53, color: GREY.text, align: 'left', x: g.L + 96, y: y + 2 });
-    const phaseLabel = makeLabel(root, 'Phase', phaseSample ?? phase, { font: 'body', size: 34, color: GREY.soft, align: 'left', x: g.L + 156, y });
+    const roundLabel = makeLabel(root, 'Round', String(round), { size: 53, color: GREY.text, align: 'left', x: g.L + 96, y: y + 2 });
+    // The phase starts after the round number, however many digits it has (was fixed at +156).
+    const px0 = Math.max(156, 96 + textWidth(roundLabel) + 18);
+    const phaseLabel = makeLabel(root, 'Phase', phaseSample ?? phase, { font: 'body', size: 34, color: GREY.soft, align: 'left', x: g.L + px0, y });
     const pw = textWidth(phaseLabel);
     phaseLabel.string = phase;
-    const rw = Math.max(420, 170 + pw + 40);
+    const rw = Math.max(420, px0 + 14 + pw + 40);
     frame(root, 'RoundRail', rw, 72, { x: left + rw / 2, y }, { closed: true }).setSiblingIndex(0);
 
     const sx = g.R - 476;
@@ -203,55 +205,103 @@ export function lineTag(h: Hand): string {
     return h.source === 'row' ? `R${h.index + 1}` : h.source === 'col' ? `C${h.index + 1}` : '';
 }
 
+/** Options for a hand list: its caption and how a hand's cooldown reads (theirs carry a multiplier). */
+export interface HandListOptions {
+    caption?: string;
+    cooldownOf?: (h: Hand) => number;
+    onTap?: (hand: Hand) => void;
+}
+
+/** Below this row pitch, one column would get cramped, so the list goes to two. */
+const MIN_PITCH = 40;
+/** Two columns past this many hands (Stage C, decision 148). */
+const ONE_COLUMN_MAX = 8;
+
 /**
- * YOUR HANDS: one open bracket, a line per hand (tag, pip, name, effect and timer,
- * charge pips at the right), dotted rules between, and a line for leftover high
- * cards. top = the bracket's top edge; maxH = the most it may take.
+ * YOUR HANDS: one open bracket, a line per hand, dotted rules between, and one line for
+ * leftover high cards. top = the bracket's top edge; maxH = the most it may take.
+ * Up to 8 hands that fit: one column, a line each (tag, pip, name, effect and timer, pips).
+ * More, or too tall: two columns of compact two-line entries (pip and name over tag,
+ * effect and timer, pips). Rows always shrink to fit maxH (decision 148).
  */
 export function buildHandList(root: Node, hands: readonly Hand[], left: number, top: number, w: number, maxH: number,
-    onTap?: (hand: Hand) => void): { entries: ListEntry[]; bottom: number } {
-    const kit = UiKit.get();
+    opts: HandListOptions | ((hand: Hand) => void) = {}): { entries: ListEntry[]; bottom: number } {
+    const o: HandListOptions = typeof opts === 'function' ? { onTap: opts } : opts;
+    const cooldownOf = o.cooldownOf ?? ((h: Hand) => h.cooldown);
     const lines = hands.filter((h) => h.source !== 'leftover');
     const leftovers = hands.length - lines.length;
     const extra = leftovers || lines.length === 0 ? 34 : 0;
-    const pitch = Math.max(40, Math.min(58, Math.floor((maxH - 44 - extra) / Math.max(1, lines.length))));
+    const head = 44;
+    const onePitch = Math.min(58, Math.floor((maxH - head - extra) / Math.max(1, lines.length)));
+    const two = lines.length > ONE_COLUMN_MAX || onePitch < MIN_PITCH;
+    const perCol = two ? Math.ceil(lines.length / 2) : lines.length;
+    const pitch = two ? Math.max(44, Math.min(64, Math.floor((maxH - head - extra) / Math.max(1, perCol)))) : Math.max(30, onePitch);
     const rowH = pitch - 6;
-    const hh = lines.length * pitch + 44 + extra;
-    frame(root, 'HandsFrame', w + 28, hh, { x: left - 14 + (w + 28) / 2, y: top - hh / 2 }, { caption: 'YOUR HANDS' });
+    const hh = perCol * pitch + head + extra;
+    frame(root, 'HandsFrame', w + 28, hh, { x: left - 14 + (w + 28) / 2, y: top - hh / 2 }, { caption: o.caption ?? 'YOUR HANDS' });
+    const colGap = 12;
+    const cw = two ? Math.floor((w - colGap) / 2) : w;
     const entries: ListEntry[] = [];
     lines.forEach((hand, i) => {
-        const rowTop = top - 34 - i * pitch;
-        const y = rowTop - rowH / 2;
-        const n = makeNode(root, `Hand ${hand.id}`, w, rowH, { x: left + w / 2, y });
-        const x0 = -w / 2;
-        const back = makeSprite(n, 'Ring', ringFrame(w + 8, rowH - 2, 'gold'), w + 8, rowH - 2);
+        const col = two ? Math.floor(i / perCol) : 0, k = two ? i % perCol : i;
+        const rowTop = top - 34 - k * pitch;
+        const cx = left + col * (cw + colGap) + cw / 2;
+        const n = makeNode(root, `Hand ${hand.id}`, cw, rowH, { x: cx, y: rowTop - rowH / 2 });
+        const back = makeSprite(n, 'Ring', ringFrame(cw + 8, rowH - 2, 'gold'), cw + 8, rowH - 2);
         back.node.active = false;
-        // Tag and pip, then the name, which gets all the room up to the effect (decision 136).
-        // The effect and timer are right-aligned: against the charge pips (heal, armor) or at
-        // the row's end (attack, rot), so "Three of a kind" never runs into "Attack 3.5s".
-        makeLabel(n, 'Tag', lineTag(hand), { size: 22, color: GREY.soft, align: 'left', x: x0 + 6 });
-        makeSprite(n, 'Icon', kit.suitIcon(hand.suit), 27, 27, { x: x0 + 50 });
-        const pips: Node[] = [];
-        const charges = EFFECT_CHARGES[hand.effect];
-        const pipsW = Number.isFinite(charges) ? charges * 17 + 8 : 0;
-        if (Number.isFinite(charges)) {
-            for (let k = 0; k < charges; k++) pips.push(makeSprite(n, `Pip${k}`, kit.suitIcon(hand.suit), 18, 18, { x: w / 2 - 12 - (charges - 1 - k) * 17 }).node);
-        }
-        const effect = makeLabel(n, 'Effect', `${EFFECT_NAME[hand.effect]} ${cooldownText(hand.cooldown)}`, { font: 'body', size: 27, color: GREY.soft, align: 'right', x: w / 2 - 4 - pipsW });
-        const nameLeft = x0 + 72;
-        const nameW = Math.max(60, Math.floor(w / 2 - 4 - pipsW - textWidth(effect) - 12 - nameLeft));
-        makeLabel(n, 'Name', HAND_INFO[hand.category].name, { size: 24, color: GREY.text, align: 'left', x: nameLeft, width: nameW, height: rowH - 8 });
-        if (i < lines.length - 1 || extra) rule(root, `Rule ${i}`, w - 12, left + 6, rowTop - pitch + 4);
-        if (onTap) n.on(Node.EventType.TOUCH_END, () => onTap(hand));
+        const pips = two ? compactEntry(n, hand, cw, rowH, cooldownOf(hand)) : wideEntry(n, hand, cw, rowH, cooldownOf(hand));
+        // A dotted rule under each line, except the last of a column with nothing below it.
+        if (k < perCol - 1 || extra) rule(root, `Rule ${i}`, cw - 12, cx - cw / 2 + 6, rowTop - pitch + 4);
+        if (o.onTap) { const tap = o.onTap; n.on(Node.EventType.TOUCH_END, () => tap(hand)); }
         entries.push({ hand, node: n, back, pips });
     });
-    const tailY = top - 34 - lines.length * pitch - 17;
+    const tailY = top - 34 - perCol * pitch - 17;
     if (lines.length === 0) {
         makeLabel(root, 'NoHands', 'No hands yet: fill a row or a column.', { font: 'body', size: 26, color: GREY.dim, align: 'left', x: left + 8, y: tailY, width: w - 8, height: 30 });
     } else if (leftovers) {
-        makeLabel(root, 'Leftovers', `+ ${leftovers} card${leftovers > 1 ? 's fire' : ' fires'} alone as ${leftovers > 1 ? 'high cards' : 'a high card'}`, { font: 'body', size: 26, color: GREY.dim, align: 'left', x: left + 8, y: tailY, width: w - 8, height: 30 });
+        // One compact line for the leftovers (they fire alone, each as a high card).
+        const text = two || w < 300 ? `+ ${leftovers} high card${leftovers > 1 ? 's' : ''}, alone`
+            : `+ ${leftovers} card${leftovers > 1 ? 's fire' : ' fires'} alone as ${leftovers > 1 ? 'high cards' : 'a high card'}`;
+        makeLabel(root, 'Leftovers', text, { font: 'body', size: 26, color: GREY.dim, align: 'left', x: left + 8, y: tailY, width: w - 8, height: 30 });
     }
     return { entries, bottom: top - hh };
+}
+
+/** One line: tag, pip, name, then effect and timer right-aligned against the pips (decision 136). */
+function wideEntry(n: Node, hand: Hand, w: number, rowH: number, cooldown: number): Node[] {
+    const kit = UiKit.get();
+    const x0 = -w / 2;
+    makeLabel(n, 'Tag', lineTag(hand), { size: 22, color: GREY.soft, align: 'left', x: x0 + 6 });
+    makeSprite(n, 'Icon', kit.suitIcon(hand.suit), 27, 27, { x: x0 + 50 });
+    const pips: Node[] = [];
+    const charges = EFFECT_CHARGES[hand.effect];
+    const pipsW = Number.isFinite(charges) ? charges * 17 + 8 : 0;
+    if (Number.isFinite(charges)) {
+        for (let k = 0; k < charges; k++) pips.push(makeSprite(n, `Pip${k}`, kit.suitIcon(hand.suit), 18, 18, { x: w / 2 - 12 - (charges - 1 - k) * 17 }).node);
+    }
+    const effect = makeLabel(n, 'Effect', `${EFFECT_NAME[hand.effect]} ${cooldownText(cooldown)}`, { font: 'body', size: 27, color: GREY.soft, align: 'right', x: w / 2 - 4 - pipsW });
+    const nameLeft = x0 + 72;
+    const nameW = Math.max(60, Math.floor(w / 2 - 4 - pipsW - textWidth(effect) - 12 - nameLeft));
+    makeLabel(n, 'Name', HAND_INFO[hand.category].name, { size: 24, color: GREY.text, align: 'left', x: nameLeft, width: nameW, height: Math.max(20, rowH - 8) });
+    return pips;
+}
+
+/** Two short lines in half the width: pip and name on top; tag, effect and timer, pips below. */
+function compactEntry(n: Node, hand: Hand, w: number, rowH: number, cooldown: number): Node[] {
+    const kit = UiKit.get();
+    const x0 = -w / 2;
+    const up = Math.min(12, rowH / 4), down = -Math.min(13, rowH / 4);
+    makeSprite(n, 'Icon', kit.suitIcon(hand.suit), 22, 22, { x: x0 + 14, y: up });
+    makeLabel(n, 'Name', HAND_INFO[hand.category].name, { size: 22, color: GREY.text, align: 'left', x: x0 + 30, y: up, width: w - 34, height: 26 });
+    makeLabel(n, 'Tag', lineTag(hand), { size: 22, color: GREY.soft, align: 'left', x: x0 + 4, y: down });
+    const pips: Node[] = [];
+    const charges = EFFECT_CHARGES[hand.effect];
+    const pipsW = Number.isFinite(charges) ? charges * 13 + 4 : 0;
+    if (Number.isFinite(charges)) {
+        for (let k = 0; k < charges; k++) pips.push(makeSprite(n, `Pip${k}`, kit.suitIcon(hand.suit), 14, 14, { x: w / 2 - 8 - (charges - 1 - k) * 13, y: down }).node);
+    }
+    makeLabel(n, 'Effect', `${EFFECT_NAME[hand.effect]} ${cooldownText(cooldown)}`, { font: 'body', size: 26, color: GREY.soft, align: 'left', x: x0 + 42, y: down, width: w - 46 - pipsW, height: 26 });
+    return pips;
 }
 
 /** normal / picked (the selected card is in it) / firing. */
@@ -309,7 +359,7 @@ export interface OpponentPanelParts {
  * cards are what you take after the round.
  */
 export function buildOpponentPanel(root: Node, r: Region, o: Opponent, hands: readonly Hand[], cooldownOf: (h: Hand) => number,
-    health: HealthGrid): OpponentPanelParts {
+    health: HealthGrid, onView?: () => void): OpponentPanelParts {
     const kit = UiKit.get();
     const panel = makeNode(root, 'Opponent', r.width, r.height, { x: r.left + r.width / 2, y: r.top - r.height / 2 });
     frame(panel, 'Frame', r.width, r.height, {}, { caption: o.boss ? 'HIS SIDE OF THE TABLE' : 'ACROSS THE TABLE' });
@@ -340,6 +390,8 @@ export function buildOpponentPanel(root: Node, r: Region, o: Opponent, hands: re
     const maxLines = Math.max(1, Math.floor(room / 50));
     const shown = listed.slice(0, listed.length > maxLines ? maxLines - 1 : maxLines);
     makeLabel(panel, 'TheirHands', 'THEIR HANDS', { size: 22, color: GREY.soft, align: 'left', x: x0, y: top - 266 });
+    // Their whole board, with its medallions, in a pop-up (Stage C, decision 149).
+    if (onView) makeButton(panel, 'ViewTable', ButtonStyle.Dark, o.boss ? 'View his table' : 'View their table', 270, 50, { x: r.width / 2 - 30 - 135, y: top - 262 }, onView, 24);
     shown.forEach((h, i) => {
         const y = top - 311 - i * 50;
         const ring = makeSprite(panel, `Their ${h.id}`, ringFrame(r.width - 44, 46, 'gold'), Math.round((r.width - 44) / 2) * 2, 46, { y }).node;

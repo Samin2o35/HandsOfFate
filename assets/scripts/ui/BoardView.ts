@@ -11,8 +11,10 @@ import { Sound } from '../app/Sound';
 import { Run } from '../core/run';
 import { Card } from '../core/cards';
 import { BoardResult } from '../core/evaluate';
-import { makeNode, makeLabel } from './UiKit';
-import { frame } from './kitC';
+import { makeNode, makeLabel, makeButton, FONT } from './UiKit';
+import { ButtonStyle } from './UiButton';
+import { Grid } from '../core/grid';
+import { frame, INK_TEXT } from './kitC';
 import { CardView, buildSlot, cardScaleFor, CARD_W, CARD_H } from './views';
 import { buildBadge, BadgeParts, BADGE, GREY } from './table';
 
@@ -25,6 +27,8 @@ export interface BoardCallbacks {
     selected: (card: Card | null) => void;
     /** A row or column badge was tapped (its hand id, or null for a line with no hand). */
     badge?: (handId: string | null) => void;
+    /** The stash strip's "All N" / "Close" tile was tapped (open or close the stash drawer). */
+    stashDrawer?: () => void;
 }
 
 export interface BoardLayout {
@@ -38,7 +42,22 @@ export interface BoardLayout {
     stashTop: number;
     stashWidth: number;
     stashHeight: number;
+    /** The stash drawer, when it's open: every stash card in rows (top-left corner and size). */
+    drawer?: { left: number; top: number; width: number; height: number };
+    /** Card scale (default: cardScaleFor the grid). */
+    scale?: number;
+    /** The bracket's caption (default YOUR TABLE). */
+    caption?: string;
 }
+
+/** What a board shows: yours (from the run) by default, or another table (their table pop-up). */
+export interface BoardSource {
+    grid: Grid;
+    result: BoardResult;
+}
+
+/** Stash cards shown in the strip before the "All N" tile takes the last place (Stage C, decision 147). */
+export const STASH_STRIP_CARDS = 3;
 
 /** Badges built for each row and column (the fight screen fills their rings). */
 export interface BoardBadges {
@@ -128,18 +147,27 @@ export class BoardView {
         private selectedId: number | null,
         /** Planning lets you drag; the fight screen shows the board read-only. */
         private interactive = true,
+        source?: BoardSource,
     ) {
+        this.grid = source?.grid ?? run.grid;
+        this.result = source?.result ?? run.board();
         this.root = makeNode(screen, 'Board', layout.width, layout.height, { x: layout.left, y: layout.top, anchorX: 0, anchorY: 1 });
         this.stash = makeNode(screen, 'Stash', Math.max(0, layout.stashWidth), Math.max(0, layout.stashHeight), { x: layout.stashLeft, y: layout.stashTop, anchorX: 0, anchorY: 1 });
+        const d = layout.drawer;
+        this.drawerNode = d ? makeNode(screen, 'StashDrawer', d.width, d.height, { x: d.left, y: d.top, anchorX: 0, anchorY: 1 }) : null;
         this.build();
     }
+
+    private grid: Grid;
+    private result: BoardResult;
+    private drawerNode: Node | null = null;
 
     // ---- Building ----------------------------------------------------------------
 
     private build() {
-        const g = this.run.grid;
-        const result: BoardResult = this.run.board();
-        const scale = cardScaleFor(g);
+        const g = this.grid;
+        const result: BoardResult = this.result;
+        const scale = this.layout.scale ?? cardScaleFor(g);
         const cw = CARD_W * scale, ch = CARD_H * scale;
         const gap = scale >= 1.5 ? 15 : 12;
         const pitchX = cw + gap, pitchY = ch + gap;
@@ -154,7 +182,7 @@ export class BoardView {
         this.block = { left: this.layout.left + left, top: this.layout.top + top, width: blockW, height: blockH };
         this.frameTop = this.block.top + 34;
         // YOUR TABLE: an open bracket round the cards and their medallions.
-        frame(this.root, 'TableFrame', blockW + 68, blockH + 64, { x: left + blockW / 2, y: top + 34 - (blockH + 64) / 2 }, { caption: 'YOUR TABLE' });
+        frame(this.root, 'TableFrame', blockW + 68, blockH + 64, { x: left + blockW / 2, y: top + 34 - (blockH + 64) / 2 }, { caption: this.layout.caption ?? 'YOUR TABLE' });
 
         const scoring = new Set<number>();
         for (const h of result.hands) if (h.source !== 'leftover') for (const pc of h.cards) scoring.add(pc.card.id);
@@ -190,21 +218,62 @@ export class BoardView {
         if (this.layout.stashWidth > 0) this.buildStash();
     }
 
+    /**
+     * STASH: the first few cards at 1× in a strip, then an "All N" tile that opens the
+     * drawer (or "Close" while it's open). With the drawer open, its cards are the ones
+     * you drag; the strip and the drawer both take drops (decision 147).
+     */
     private buildStash() {
         const cards = this.run.stash;
         const w = CARD_W, h = CARD_H;
-        // STASH: an open bracket; the whole stash area takes drops.
         const sw = this.layout.stashWidth, sh = this.layout.stashHeight + 14;
-        frame(this.stash, 'Frame', sw + 28, sh, { x: sw / 2, y: 4 - sh / 2 }, { caption: 'STASH' });
-        const room = sw - w - 16;
-        const step = cards.length > 1 ? Math.min(97, room / (cards.length - 1)) : 0;
-        cards.forEach((card, i) => {
-            const v = CardView.create(this.stash, card, w, h, 8 + w / 2 + i * step, -32 - h / 2);
+        frame(this.stash, 'Frame', sw + 28, sh, { x: sw / 2, y: 4 - sh / 2 }, { caption: cards.length ? `STASH · ${cards.length}` : 'STASH' });
+        const cy = -32 - h / 2, step = 97;
+        const open = !!this.drawerNode;
+        const many = cards.length > STASH_STRIP_CARDS + 1;
+        const shown = open ? [] : many ? cards.slice(0, STASH_STRIP_CARDS) : cards;
+        shown.forEach((card, i) => {
+            const v = CardView.create(this.stash, card, w, h, 8 + w / 2 + i * step, cy);
             v.setSelected(card.id === this.selectedId);
             this.hook(v);
         });
+        if ((many || open) && this.callbacks.stashDrawer) {
+            const x = 8 + w / 2 + (open ? 0 : STASH_STRIP_CARDS) * step;
+            const tile = makeButton(this.stash, 'StashAll', open ? ButtonStyle.Cream : ButtonStyle.Dark, '', w, h, { x, y: cy }, () => this.callbacks.stashDrawer!());
+            makeLabel(tile.node, 'Top', open ? 'Close' : 'All', { size: FONT.label, color: open ? INK_TEXT.ink : GREY.text, y: 18 });
+            if (!open) makeLabel(tile.node, 'Count', String(cards.length), { size: FONT.heading, color: GREY.text, y: -20 });
+            if (open) makeLabel(this.stash, 'Hint', 'Drag from the drawer', { font: 'body', size: 26, color: GREY.dim, align: 'left', x: 8 + w + 16, y: cy, width: sw - w - 32, height: 60 });
+        }
         if (cards.length === 0) {
-            makeLabel(this.stash, 'Empty', 'Drop cards here', { font: 'body', size: 27, color: GREY.dim, align: 'left', x: 16, y: -32 - h / 2 });
+            makeLabel(this.stash, 'Empty', 'Drop cards here', { font: 'body', size: 27, color: GREY.dim, align: 'left', x: 16, y: cy });
+        }
+        if (this.drawerNode) this.buildDrawer(cards);
+    }
+
+    /** YOUR STASH drawer: every stash card in rows, at the largest size that fits (1×, 0.75×, 0.5×). */
+    private buildDrawer(cards: readonly Card[]) {
+        const d = this.layout.drawer!, node = this.drawerNode!;
+        frame(node, 'Frame', d.width, d.height, { x: d.width / 2, y: -d.height / 2 }, { caption: `YOUR STASH · ${cards.length}` });
+        const pad = 30, top = 50, bottom = 130;
+        const areaW = d.width - pad * 2, areaH = d.height - top - bottom;
+        let scale = 0.5, perRow = 1;
+        for (const s of [1, 0.75, 0.5]) {
+            const gap = 12 * s + 4;
+            perRow = Math.max(1, Math.floor((areaW + gap) / (CARD_W * s + gap)));
+            if (Math.ceil(cards.length / perRow) * (CARD_H * s + gap) - gap <= areaH) { scale = s; break; }
+            scale = s;
+        }
+        const cw = CARD_W * scale, ch = CARD_H * scale, gap = 12 * scale + 4;
+        cards.forEach((card, i) => {
+            const r = Math.floor(i / perRow), c = i % perRow;
+            const v = CardView.create(node, card, cw, ch, pad + cw / 2 + c * (cw + gap), -top - ch / 2 - r * (ch + gap));
+            v.setSelected(card.id === this.selectedId);
+            this.hook(v);
+        });
+        if (cards.length === 0) makeLabel(node, 'Empty', 'The stash is empty.', { font: 'body', size: 30, color: GREY.dim, align: 'left', x: pad, y: -top - 30 });
+        makeLabel(node, 'Tip', 'Drag a card onto your table.', { font: 'body', size: 27, color: GREY.soft, align: 'left', x: pad, y: -d.height + 80, width: d.width - pad * 2 - 230, height: 60 });
+        if (this.callbacks.stashDrawer) {
+            makeButton(node, 'Close', ButtonStyle.Cream, 'Close', 200, 80, { x: d.width - pad - 100, y: -d.height + 70 }, () => this.callbacks.stashDrawer!(), 30);
         }
     }
 
@@ -278,6 +347,7 @@ export class BoardView {
             if (worldRect(s.node).contains(loc)) return { row: s.row, col: s.col };
         }
         if (worldRect(this.stash).contains(loc)) return 'stash';
+        if (this.drawerNode && worldRect(this.drawerNode).contains(loc)) return 'stash';
         return null;
     }
 }
