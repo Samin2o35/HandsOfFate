@@ -6,7 +6,7 @@
 // Next round unlocks once both are picked. Grid asks row or column when both can grow.
 // Next round goes to the boss intro on boss rounds, otherwise to planning.
 
-import { _decorator, Node, UITransform, Widget, tween, Vec3, Sprite, Color } from 'cc';
+import { _decorator, Node, UITransform, Widget, tween, Vec3, Color } from 'cc';
 import { Sound } from '../app/Sound';
 import { GameScreen } from './GameScreen';
 import { Game } from '../app/Game';
@@ -18,10 +18,11 @@ import { UiKit, makeNode, makeSprite, makeLabel, makeButton, clearChildren, FONT
 import { ButtonStyle, UiButton } from './UiButton';
 import { CardView, CARD_W, CARD_H, cardWords } from './views';
 import { tableRegions, buildStrip, buildJoker, GREY } from './table';
-import { frame, INK_TEXT } from './kitC';
+import { frame, rewardIcon, INK_TEXT } from './kitC';
 import { PlanningMessage } from './flow';
 import { tutorialStep, setTutorialStep, showTutorial } from './Tutorial';
 import { celebrateAces } from './Modal';
+import { jokerLine } from './joker';
 const { ccclass } = _decorator;
 
 
@@ -66,7 +67,7 @@ export class RoundWonScreen extends GameScreen {
         const root = this.content;
 
         buildStrip(root, g, r.round, 'Cleared · take a card, then a reward', run.score, () => this.toTitle());
-        buildJoker(root, g, 0, g.T - 104);
+        buildJoker(root, g, 0, g.T - 104, null, tutorialStep() > 0 ? '' : jokerLine('take'));
         const top = g.side.top, bottom = g.side.top - g.side.height;
         const tabW = 560;
         this.buildScore(root, r, g.L, top, tabW, top - bottom);
@@ -108,7 +109,7 @@ export class RoundWonScreen extends GameScreen {
         rows.forEach(([name, detail, value], i) => line(name, detail, value, lineTop - i * 76));
         const subY = lineTop - 4 * 76;
         line('Subtotal', '', s.subtotal.toLocaleString('en-US'), subY);
-        line(`Round ${r.round} multiplier`, '', `× ${s.multiplier.toFixed(1)}`, subY - 56, '#D2453C');
+        line(`Round ${r.round} multiplier`, '', `× ${s.multiplier.toFixed(1)}`, subY - 56, '#C93038');
 
         const totalBox = frame(tab, 'TotalBox', w - 40, 100, { y: -h / 2 + 20 + 50 }, { closed: true });
         makeLabel(totalBox, 'Title', 'ROUND TOTAL', { size: FONT.label + 3, spacing: 2, color: GREY.text, align: 'left', x: -(w - 40) / 2 + 20 });
@@ -197,16 +198,27 @@ export class RoundWonScreen extends GameScreen {
             const inkSoft = selected ? INK_TEXT.ink : live ? GREY.soft : GREY.dim;
             makeLabel(cardNode, 'Badge', spec.badge, { size: FONT.label + 6, color: ink, align: 'left', x: -cw / 2 + 20, y: h / 2 - 28 });
 
-            const twoButtons = spec.kind === 'grid' && opt.available && (opt.directions ?? []).length === 2;
-            const iconY = h / 2 - 72;
-            const icons: Sprite[] = [];
-            if (spec.kind === 'health') icons.push(makeSprite(cardNode, 'Icon', kit.frame('ui/icons/reward_health'), 65, 55, { y: iconY }));
-            else if (spec.kind === 'grid') icons.push(makeSprite(cardNode, 'Icon', kit.frame('ui/icons/reward_grid'), 70, 55, { y: iconY }));
-            else [-1, 0, 1].forEach((k) => icons.push(makeSprite(cardNode, `Back${k}`, kit.frame('cards/updated/back'), 45, 63, { x: k * 34, y: iconY })));
-            if (!live) for (const ic of icons) ic.color = new Color().fromHEX('#6E6276');
-            makeLabel(cardNode, 'Title', spec.title, { size: FONT.heading, color: selected ? INK_TEXT.ink : live ? spec.color : GREY.dim, y: iconY - 60 });
-            if (twoButtons) makeLabel(cardNode, 'Text', 'Add a row or a column', { font: 'body', size: 24, color: inkSoft, y: iconY - 96, width: cw - 30, height: 30 });
-            else makeLabel(cardNode, 'Text', opt.available ? spec.text : spec.full, { font: 'body', size: 24, color: inkSoft, y: iconY - 96, width: cw - 30, height: 56, anchorY: 1 });
+            const twoButtons = live && spec.kind === 'grid' && (opt.directions ?? []).length === 2;
+            // With + Row / + Col along the bottom, the icon, title and line move up to make room.
+            const iconY = h / 2 - (twoButtons ? 60 : 72);
+            const titleY = iconY - (twoButtons ? 54 : 60), textY = iconY - (twoButtons ? 86 : 96);
+            // Health and Grid are drawn pictures with their own greyed version. The Cards reward
+            // shows the deck's backs, which are never tinted: a dark cover goes over them instead.
+            if (spec.kind !== 'cards') {
+                const icon = rewardIcon(spec.kind, live);
+                makeSprite(cardNode, 'Icon', icon.frame, icon.w, icon.h, { y: iconY });
+            } else {
+                [-1, 0, 1].forEach((k) => {
+                    const back = makeSprite(cardNode, `Back${k}`, kit.frame('cards/updated/back'), 45, 63, { x: k * 34, y: iconY });
+                    if (!live) {
+                        const cover = makeSprite(back.node, 'Cover', kit.spark, 45, 63);
+                        cover.color = new Color(0x16, 0x12, 0x1c, 170);
+                    }
+                });
+            }
+            makeLabel(cardNode, 'Title', spec.title, { size: FONT.heading, color: selected ? INK_TEXT.ink : live ? spec.color : GREY.dim, y: titleY });
+            if (twoButtons) makeLabel(cardNode, 'Text', 'Add a row or a column', { font: 'body', size: 24, color: inkSoft, y: textY, width: cw - 30, height: 28 });
+            else makeLabel(cardNode, 'Text', opt.available ? spec.text : spec.full, { font: 'body', size: 24, color: inkSoft, y: textY, width: cw - 30, height: 56, anchorY: 1 });
 
             // Step 2 waits for step 1: shown, but greyed and not clickable.
             if (!live) return;

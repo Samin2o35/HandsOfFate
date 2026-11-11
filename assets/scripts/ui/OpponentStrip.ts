@@ -1,12 +1,15 @@
 // Hands of Fate — ui/OpponentStrip.ts
-// The dark strip at the top of the planning and fight screens (mockup 05):
-// avatar, table name, their small board, their hands, their health.
+// A table seen whole: avatar, name, their small board, their hands, their health.
+// Used by the boss intro (HIS TABLE), as an open bracket on the smoke.
 
 import { Node } from 'cc';
 import { Opponent, opponentHealth } from '../core/opponents';
 import { evaluateBoard } from '../core/evaluate';
 import { HealthGrid } from '../core/health';
-import { UiKit, makeNode, makeSprite, makeLabel, textWidth, FONT, COLOR } from './UiKit';
+import { UiKit, makeNode, makeSprite, makeLabel, textWidth, FONT } from './UiKit';
+import { frame, INK_TEXT } from './kitC';
+
+const COLOR = { cream: INK_TEXT.main, lilac: INK_TEXT.second, dim: INK_TEXT.quiet };
 import { buildMiniBoard, buildHealthGrid, shortName, cooldownText, HealthGridParts, buildAvatar } from './views';
 
 export interface OpponentStripParts {
@@ -18,7 +21,7 @@ export interface OpponentStripParts {
 export function buildOpponentStrip(parent: Node, o: Opponent, x: number, y: number, w: number, h: number, health?: HealthGrid, showAvatar = true): OpponentStripParts {
     const kit = UiKit.get();
     const node = makeNode(parent, 'Opponent', w, h, { x, y, anchorX: 0, anchorY: 1 });
-    makeSprite(node, 'Panel', kit.panelDark, w, h + 6, { x: w / 2, y: -(h + 6) / 2 }, true);
+    frame(node, 'Panel', w, h + 6, { x: w / 2, y: -(h + 6) / 2 }, { caption: showAvatar ? undefined : (o.boss ? 'HIS TABLE' : 'THEIR TABLE') });
 
     // Avatar: the Classic face card; bosses: their animated King, as on the boss intro.
     // The boss intro hides it.
@@ -30,9 +33,8 @@ export function buildOpponentStrip(parent: Node, o: Opponent, x: number, y: numb
 
     // Name, then their board and their hands side by side.
     const left = showAvatar ? 33 + aw + 30 : 33;
-    makeLabel(node, 'Name', showAvatar ? o.name : (o.boss ? 'HIS TABLE' : 'THEIR TABLE'), showAvatar
-        ? { size: FONT.heading, color: COLOR.cream, align: 'left', x: left, y: -42 }
-        : { size: FONT.labelSmall, spacing: 2, color: COLOR.lilac, align: 'left', x: left, y: -36 });
+    // Without the avatar the bracket's caption names the table.
+    if (showAvatar) makeLabel(node, 'Name', o.name, { size: FONT.heading, color: COLOR.cream, align: 'left', x: left, y: -42 });
     const boardTop = -72;
     const mini = buildMiniBoard(node, o.grid, 230, h - 72 - 24, left, boardTop);
 

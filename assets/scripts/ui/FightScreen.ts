@@ -43,6 +43,7 @@ import { HandCategory } from '../core/hands';
 import { finishRound } from './flow';
 import { Sound } from '../app/Sound';
 import { tutorialStep, setTutorialStep, showTutorial } from './Tutorial';
+import { jokerLine, jokerSay } from './joker';
 import {
     tableRegions, buildStrip, buildHandList, paintEntry, buildOpponentPanel, paintBadge, lightBadge, setCount, buildHealthBlock, buildJoker, HealthBlock,
     BadgeParts, ListEntry, GREY,
@@ -55,6 +56,8 @@ const CHARGE = 0.4;    // game-seconds before firing when a hand's cards lift an
 const LIFT = 10;
 /** Full house or better gets the zoom. */
 const BIG = new Set<HandCategory>(['fullHouse', 'quads', 'straightFlush']);
+/** Hands the Joker remarks on. */
+const BRAG = new Set<HandCategory>(['flush', 'fullHouse', 'quads', 'straightFlush']);
 const STASH_H = 180; // planning's stash height, kept free so the list matches planning
 
 /** What changed on a grid because of one event. */
@@ -66,6 +69,9 @@ export class FightScreen extends GameScreen {
     private fight: Fight | null = null;
     private paused = false;
     private ending = false;
+    /** The Joker waits a few seconds between lines; `said` steps through his variants. */
+    private quietUntil = 0;
+    private said = 0;
 
     // Copies of both health grids, updated event by event (see show()).
     private view: Record<SideId, HealthGrid> | null = null;
@@ -376,6 +382,18 @@ export class FightScreen extends GameScreen {
             Smoke.puff(centre, Math.min(1, 0.3 + hits * 0.1));
         }
         if (e.hand && BIG.has(e.hand.category)) this.rig?.punch(centre);
+        this.react(e, diff);
+    }
+
+    /** The Joker speaks up now and then: your big hands, and your big losses. */
+    private react(e: FightEvent, diff: Diff) {
+        if (!this.content || this.clock < this.quietUntil || tutorialStep() > 0) return;
+        let line = '';
+        if (e.side === 'player' && e.hand && BRAG.has(e.hand.category)) line = jokerLine('bigHand', ++this.said);
+        else if (e.target === 'player' && diff.destroyed.length >= 3) line = jokerLine('hurt', ++this.said);
+        if (!line) return;
+        jokerSay(this.content, line, 2.4);
+        this.quietUntil = this.clock + 5;
     }
 
     private cellEffects(parts: HealthGridParts, e: FightEvent, d: Diff): Vec3 {
@@ -402,8 +420,8 @@ export class FightScreen extends GameScreen {
         const suit = e.hand?.suit ?? null;
         if (d.destroyed.length) popNumber(fx, parts.node, centre, `-${d.destroyed.length}`, FX_COLOR.hit, suit);
         else if (d.healed.length) popNumber(fx, parts.node, centre, `+${d.healed.length}`, FX_COLOR.heal, suit);
-        else if (d.shielded.length) popNumber(fx, parts.node, centre, `+${d.shielded.length}`, '#8FB8E0', suit);
-        else if (d.popped.length) popNumber(fx, parts.node, centre, 'blocked', '#8FB8E0', null);
+        else if (d.shielded.length) popNumber(fx, parts.node, centre, `+${d.shielded.length}`, '#94D2D4', suit);
+        else if (d.popped.length) popNumber(fx, parts.node, centre, 'blocked', '#94D2D4', null);
         return centre;
     }
 
@@ -459,6 +477,7 @@ export class FightScreen extends GameScreen {
         if (!won) Sound.music(null);
         const banner = frame(this.node, 'EndBanner', 1080, 180, {}, { closed: true, fill: 'room0' });
         makeLabel(banner, 'Text', won ? 'ROUND WON' : 'THE KING HAS FALLEN', { size: FONT.title, spacing: 4, color: won ? INK_TEXT.gold : INK_TEXT.red, y: 4 });
+        if (tutorialStep() === 0 && this.content) jokerSay(this.content, jokerLine(won ? 'won' : 'lost', this.run!.round));
         banner.setScale(0.6, 0.6, 1);
         tween(banner).to(0.2, { scale: new Vec3(1, 1, 1) }, { easing: 'backOut' }).start();
         this.scheduleOnce(() => finishRound(this.run!, f), END_PAUSE);

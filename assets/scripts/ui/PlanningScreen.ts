@@ -24,6 +24,7 @@ import { ForgeView } from './ForgeView';
 import { cardWords } from './views';
 import { finishRound, PlanningMessage } from './flow';
 import { tutorialStep, setTutorialStep, finishTutorial, showTutorial, suitLegend } from './Tutorial';
+import { jokerLine, Moment } from './joker';
 import {
     tableRegions, TableRegions, buildStrip, buildHandList, paintEntry, buildOpponentPanel, ListEntry, GREY, buildJoker, buildHealthBlock,
 } from './table';
@@ -101,7 +102,10 @@ export class PlanningScreen extends GameScreen {
             selected: (card) => { this.selected = card; this.pickedHand = null; this.message = null; this.refreshSelection(); },
             badge: (id) => this.pickHand(id),
         }, this.selected?.id ?? null);
-        buildJoker(root, g, board.block.left + board.block.width / 2, board.frameTop, this.message);
+        // His line when there's no round news (none during the tutorial: the Dealer is talking).
+        const moment: Moment = this.forgeOpen ? 'forge' : run.opponent.boss ? 'king' : run.round === 1 ? 'newRun' : 'planning';
+        const quote = tutorialStep() > 0 ? '' : jokerLine(moment, run.round);
+        buildJoker(root, g, board.block.left + board.block.width / 2, board.frameTop, this.message, quote);
 
         const listTop = side.top + 4;
         const listMax = listTop - (stashTop + 4) - 22 - healthH - 22;

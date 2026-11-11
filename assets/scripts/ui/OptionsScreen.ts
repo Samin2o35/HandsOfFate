@@ -9,7 +9,8 @@ import { Game, SPEEDS, SPEED_NAME } from '../app/Game';
 import { ScreenManager } from '../app/ScreenManager';
 import { Sound } from '../app/Sound';
 import { Smoke } from '../app/Smoke';
-import { UiKit, makeNode, makeSprite, makeLabel, makeButton, clearChildren, FONT, COLOR } from './UiKit';
+import { UiKit, makeNode, makeLabel, makeButton, clearChildren, FONT } from './UiKit';
+import { frame, INK_TEXT } from './kitC';
 import { ButtonStyle } from './UiButton';
 import { confirmBox } from './Modal';
 const { ccclass } = _decorator;
@@ -28,7 +29,6 @@ export class OptionsScreen extends GameScreen {
     }
 
     private build() {
-        const kit = UiKit.get();
         if (!this.node.isValid) return;
         this.node.getComponent(Widget)?.updateAlignment();
         const ut = this.node.getComponent(UITransform)!;
@@ -43,11 +43,11 @@ export class OptionsScreen extends GameScreen {
         const leftX = -(colW + colGap) / 2, rightX = (colW + colGap) / 2;
         const gap = 18;
 
-        const plaque = makeSprite(root, 'Plaque', kit.panelCream, 420, 120, { y: T - 40 - 60 }, true).node;
-        makeLabel(plaque, 'Title', 'OPTIONS', { size: FONT.heading + 9, spacing: 3, color: COLOR.ink, y: 5 });
+        const plaque = frame(root, 'Plaque', 420, 120, { y: T - 40 - 60 }, { closed: true });
+        makeLabel(plaque, 'Title', 'OPTIONS', { size: FONT.heading + 9, spacing: 3, color: INK_TEXT.main, y: 0 });
 
         const sectionTitle = (name: string, text: string, cx: number, y: number) =>
-            makeLabel(root, name, text, { size: FONT.label, spacing: 2, color: COLOR.lilac, align: 'left', x: cx - colW / 2, y });
+            makeLabel(root, name, text, { size: FONT.label, spacing: 2, color: INK_TEXT.second, align: 'left', x: cx - colW / 2, y });
 
         // Left column: fight speed, then sound.
         let y = T - 240;
@@ -63,7 +63,7 @@ export class OptionsScreen extends GameScreen {
             });
         });
         y -= 70;
-        makeLabel(root, 'SpeedNote', 'Speed never changes your score: par time counts game-seconds.', { font: 'body', size: 26, color: COLOR.dim, align: 'left', x: leftX - colW / 2, y });
+        makeLabel(root, 'SpeedNote', 'Speed never changes your score: par time counts game-seconds.', { font: 'body', size: 26, color: INK_TEXT.quiet, align: 'left', x: leftX - colW / 2, y });
 
         y -= 110;
         sectionTitle('SoundTitle', 'SOUND', leftX, y);
@@ -71,7 +71,7 @@ export class OptionsScreen extends GameScreen {
         const hw = (colW - gap) / 2;
         const toggle = (key: 'music' | 'sfx', name: string, i: number) => {
             const on = Game.settings[key];
-            makeButton(root, `Toggle ${key}`, on ? ButtonStyle.Cream : ButtonStyle.Dark, `${name}: ${on ? 'On' : 'Off'}`, hw, 100, { x: leftX - colW / 2 + hw / 2 + i * (hw + gap), y }, () => {
+            makeButton(root, `Toggle ${key}`, ButtonStyle.Dark, `${name}: ${on ? 'On' : 'Off'}`, hw, 100, { x: leftX - colW / 2 + hw / 2 + i * (hw + gap), y }, () => {
                 Game.settings[key] = !Game.settings[key];
                 Game.saveSettings();
                 Sound.settingsChanged();
@@ -87,20 +87,21 @@ export class OptionsScreen extends GameScreen {
         y -= 70;
         makeButton(root, 'Replay', ButtonStyle.Dark, 'Replay the tutorial', colW, 100, { x: rightX, y }, () => this.replayTutorial());
 
+        // Toggles are outlines that name their state; cream is kept for the one chosen speed.
         // Background motion cycles Full → Low → Off; Screen shake (and the fight zoom) on or off.
         y -= 180;
         sectionTitle('MotionTitle', 'MOTION', rightX, y);
         y -= 70;
         const motion = Game.settings.motion ?? 'full';
         const MOTION_NAME = { full: 'Full', low: 'Low', off: 'Off' } as const;
-        makeButton(root, 'Motion', motion === 'off' ? ButtonStyle.Dark : ButtonStyle.Cream, `Background: ${MOTION_NAME[motion]}`, hw, 100, { x: rightX - colW / 2 + hw / 2, y }, () => {
+        makeButton(root, 'Motion', ButtonStyle.Dark, `Background: ${MOTION_NAME[motion]}`, hw, 100, { x: rightX - colW / 2 + hw / 2, y }, () => {
             Game.settings.motion = motion === 'full' ? 'low' : motion === 'low' ? 'off' : 'full';
             Game.saveSettings();
             Smoke.applyMotion();
             this.build();
         }, 27);
         const shakeOn = Game.settings.shake !== false;
-        makeButton(root, 'Shake', shakeOn ? ButtonStyle.Cream : ButtonStyle.Dark, `Screen shake: ${shakeOn ? 'On' : 'Off'}`, hw, 100, { x: rightX - colW / 2 + hw / 2 + hw + gap, y }, () => {
+        makeButton(root, 'Shake', ButtonStyle.Dark, `Screen shake: ${shakeOn ? 'On' : 'Off'}`, hw, 100, { x: rightX - colW / 2 + hw / 2 + hw + gap, y }, () => {
             Game.settings.shake = !shakeOn;
             Game.saveSettings();
             this.build();
@@ -117,7 +118,7 @@ export class OptionsScreen extends GameScreen {
         });
 
         // Credits and Back along the bottom.
-        makeLabel(root, 'Credits', 'Card art: Pixel Plebes by Greebles (Devlyn JD) · Fonts: Pixelify Sans, VT323 (OFL)', { font: 'body', size: 24, color: COLOR.dim, y: B + 170, width: colW * 2 + colGap, height: 40 });
+        makeLabel(root, 'Credits', 'Card art: Pixel Plebes by Greebles (Devlyn JD) · Fonts: Pixelify Sans, VT323 (OFL)', { font: 'body', size: 24, color: INK_TEXT.quiet, y: B + 170, width: colW * 2 + colGap, height: 40 });
         makeButton(root, 'Back', ButtonStyle.Dark, 'Back', 600, 100, { y: B + 40 + 50 }, () => this.goBack());
     }
 

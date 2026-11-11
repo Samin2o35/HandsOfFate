@@ -1,6 +1,6 @@
 // Hands of Fate — ui/fx.ts
 // Short effects drawn on an effects layer above everything:
-//   flashRing  a ring that pops out from a cell and fades (hit, heal, rot, shield)
+//   flashRing  a crisp outline that pops round a cell and blinks out (hit, heal, rot, shield)
 //   sparks     a few pixel squares flying out from a hit
 //   floatText  "-3" / "+8" rising and fading
 //   shake      a quick shake of a node (a grid being hit)
@@ -9,13 +9,15 @@
 
 import { Node, Color, UIOpacity, UITransform, Vec2, Vec3, tween } from 'cc';
 import { UiKit, makeSprite, makeLabel, FONT } from './UiKit';
+import { flashFrame } from './kitC';
 
+/** Effect colours, all from the open-table palette (gold, the heart pink, the deck's green, blue, red). */
 export const FX_COLOR = {
-    hit: '#E9C46A',
-    heal: '#FF8FB0',
-    rot: '#4FB067',
+    hit: '#FDD164',
+    heal: '#D47564',
+    rot: '#309C63',
     shield: '#3978A8',
-    red: '#D2453C',
+    red: '#C93038',
 };
 
 function toLocal(layer: Node, world: Vec3): Vec3 {
@@ -27,13 +29,22 @@ function fadeOut(n: Node, seconds: number, delay = 0) {
     tween(op).delay(delay).to(seconds, { opacity: 0 }).call(() => n.destroy()).start();
 }
 
+/**
+ * A crisp outline pops round a changed cell: drawn wide, then snug, then it blinks
+ * out. Two drawn sizes instead of a smooth scale, so the pixels stay whole.
+ */
 export function flashRing(layer: Node, world: Vec3, size: number, color: string) {
-    const s = makeSprite(layer, 'Flash', UiKit.get().ringWhite, size + 10, size + 10, {}, true);
+    const wide = flashFrame(size + 20), snug = flashFrame(size + 8);
+    const s = makeSprite(layer, 'Flash', wide.frame, wide.px, wide.px);
     s.color = new Color().fromHEX(color);
     s.node.setPosition(toLocal(layer, world));
-    s.node.setScale(1.35, 1.35, 1);
-    tween(s.node).to(0.18, { scale: new Vec3(1, 1, 1) }).start();
-    fadeOut(s.node, 0.4, 0.2);
+    const ut = s.node.getComponent(UITransform)!;
+    tween(s.node)
+        .delay(0.07).call(() => { s.spriteFrame = snug.frame; ut.setContentSize(snug.px, snug.px); })
+        .delay(0.2).call(() => { s.enabled = false; })
+        .delay(0.06).call(() => { s.enabled = true; })
+        .delay(0.08).call(() => s.node.destroy())
+        .start();
 }
 
 export function sparks(layer: Node, world: Vec3, color: string, count = 4) {

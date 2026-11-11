@@ -11,7 +11,8 @@ import { ScreenManager } from '../app/ScreenManager';
 import { Run, RoundResult } from '../core/run';
 import { HAND_INFO } from '../core/hands';
 import { ACES, AceId, closestAce } from '../core/achievements';
-import { UiKit, makeNode, makeSprite, makeLabel, makeButton, clearChildren, FONT, COLOR } from './UiKit';
+import { UiKit, makeNode, makeSprite, makeLabel, makeButton, clearChildren, FONT } from './UiKit';
+import { frame, barFrame, INK_TEXT } from './kitC';
 import { ButtonStyle } from './UiButton';
 import { CARD_W, CARD_H, buildAvatar } from './views';
 import { dashedLine, statRow } from './parts';
@@ -69,13 +70,13 @@ export class RunOverScreen extends GameScreen {
         const cx = L + innerW / 2;
 
         const plaqueTop = T - 40, plaqueH = 140;
-        const plaque = makeSprite(root, 'Plaque', kit.panelCream, innerW + 10, plaqueH + 10, { x: cx, y: plaqueTop - (plaqueH + 10) / 2 }, true).node;
-        makeLabel(plaque, 'Title', 'THE KING HAS FALLEN', { size: FONT.title - 6, spacing: 3, color: '#D2453C', y: 20 });
-        makeLabel(plaque, 'Sub', 'Your health grid is empty. The run is over.', { font: 'body', size: FONT.bodySmall, color: COLOR.ink, y: -32 });
+        const plaque = frame(root, 'Plaque', innerW + 10, plaqueH + 10, { x: cx, y: plaqueTop - (plaqueH + 10) / 2 }, { closed: true });
+        makeLabel(plaque, 'Title', 'THE KING HAS FALLEN', { size: FONT.title - 6, spacing: 3, color: INK_TEXT.red, y: 20 });
+        makeLabel(plaque, 'Sub', 'Your health grid is empty. The run is over.', { font: 'body', size: FONT.bodySmall, color: INK_TEXT.main, y: -32 });
 
         // Stats.
         const statsTop = plaqueTop - plaqueH - 30, statsH = 390;
-        const stats = makeSprite(root, 'Stats', kit.panelCream, innerW + 10, statsH + 10, { x: cx, y: statsTop - (statsH + 10) / 2 }, true).node;
+        const stats = frame(root, 'Stats', innerW + 10, statsH + 10, { x: cx, y: statsTop - (statsH + 10) / 2 }, { caption: 'THE RUN' });
         const x0 = -(innerW + 10) / 2 + 40, x1 = (innerW + 10) / 2 - 40;
         const best = run.data.totals.bestHand;
         const rows: [string, string][] = [
@@ -92,8 +93,8 @@ export class RunOverScreen extends GameScreen {
         const o = run.opponent;
         const avatarY = -statsH / 2 + 70;
         buildAvatar(stats, 'Avatar', o.avatar, !!o.boss, CARD_W * 0.75, CARD_H * 0.75, { x: x0 + 34, y: avatarY });
-        makeLabel(stats, 'BeatenBy', 'Beaten by', { font: 'body', size: FONT.bodySmall, color: '#3D3450', align: 'left', x: x0 + 90, y: avatarY + 18 });
-        makeLabel(stats, 'Who', this.result?.opponent ?? o.name, { size: FONT.label + 6, color: COLOR.ink, align: 'left', x: x0 + 90, y: avatarY - 16 });
+        makeLabel(stats, 'BeatenBy', 'Beaten by', { font: 'body', size: FONT.bodySmall, color: INK_TEXT.second, align: 'left', x: x0 + 90, y: avatarY + 18 });
+        makeLabel(stats, 'Who', this.result?.opponent ?? o.name, { size: FONT.label + 6, color: INK_TEXT.main, align: 'left', x: x0 + 90, y: avatarY - 16 });
 
         this.buildAce(root, L, innerW, statsTop - statsH - 34);
 
@@ -106,30 +107,30 @@ export class RunOverScreen extends GameScreen {
     private buildAce(root: Node, L: number, innerW: number, top: number) {
         const kit = UiKit.get();
         const h = 135;
-        const panel = makeSprite(root, 'Ace', kit.panelDark, innerW, h + 6, { x: L + innerW / 2, y: top - (h + 6) / 2 }, true).node;
+        const panel = frame(root, 'Ace', innerW, h + 6, { x: L + innerW / 2, y: top - (h + 6) / 2 }, { caption: 'CLOSEST ACE' });
         const justEarned = this.earned.length ? ACES.find((a) => a.id === this.earned[0])! : null;
         const close = justEarned ? null : closestAce(Game.profile);
         const ace = justEarned ?? close?.ace ?? null;
         const left = -innerW / 2 + 33;
         if (!ace) {
-            makeLabel(panel, 'All', 'ALL FOUR ACES EARNED', { size: FONT.label + 3, spacing: 2, color: COLOR.gold, align: 'left', x: left, y: 3 });
+            makeLabel(panel, 'All', 'ALL FOUR ACES EARNED', { size: FONT.label + 3, spacing: 2, color: INK_TEXT.gold, align: 'left', x: left, y: 3 });
             return;
         }
         // The Classic Ace; a dark overlay (not a tint of the art) shows it's still locked.
         const card = makeSprite(panel, 'AceCard', kit.classicFrame({ suit: ace.suit, rank: 14 }), 66, 92, { x: left + 33, y: 3 });
         if (!justEarned) {
             const lock = makeSprite(card.node, 'Locked', kit.spark, 66, 92);
-            lock.color = new Color(18, 14, 26, 150);
+            lock.color = new Color(0x16, 0x12, 0x1c, 184);
         }
         const tx = left + 90;
-        makeLabel(panel, 'Title', justEarned ? `ACE EARNED · ${ace.name.toUpperCase()}` : `CLOSEST ACE · ${ace.name.toUpperCase()}`, { size: FONT.labelSmall, spacing: 2, color: COLOR.gold, align: 'left', x: tx, y: 36 });
+        makeLabel(panel, 'Title', justEarned ? `ACE EARNED · ${ace.name.toUpperCase()}` : `CLOSEST ACE · ${ace.name.toUpperCase()}`, { size: FONT.labelSmall, spacing: 2, color: INK_TEXT.gold, align: 'left', x: tx, y: 36 });
         const best = Game.profile.aces[ace.id].best;
-        makeLabel(panel, 'Goal', justEarned ? ace.goal : `${ace.goal} · best ${best.toLocaleString('en-US')}`, { font: 'body', size: FONT.bodySmall, color: COLOR.cream, align: 'left', x: tx, y: 4 });
+        makeLabel(panel, 'Goal', justEarned ? ace.goal : `${ace.goal} · best ${best.toLocaleString('en-US')}`, { font: 'body', size: FONT.bodySmall, color: INK_TEXT.main, align: 'left', x: tx, y: 4 });
         const barLeft = tx;
-        const barTotal = innerW / 2 - 33 - barLeft;
-        makeSprite(panel, 'Track', kit.barTrack, barTotal, 12, { x: barLeft + barTotal / 2, y: -30 }, true);
+        const barTotal = Math.round((innerW / 2 - 33 - barLeft) / 2) * 2;
+        frame(panel, 'Track', barTotal, 16, { x: barLeft + barTotal / 2, y: -30 }, { closed: true, color: 'soft' });
         const fraction = justEarned ? 1 : close!.fraction;
-        if (fraction > 0) makeSprite(panel, 'Fill', kit.barFillGold, Math.max(12, barTotal * fraction), 12, { x: barLeft, y: -30, anchorX: 0 }, true);
+        if (fraction > 0) makeSprite(panel, 'Fill', barFrame(barTotal - 12, fraction, INK_TEXT.gold), barTotal - 12, 6, { x: barLeft + barTotal / 2, y: -30 });
     }
 
     private newRun() {

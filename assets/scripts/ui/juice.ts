@@ -28,10 +28,10 @@ function fade(n: Node, seconds: number, delay = 0) {
 
 /** What each suit throws: ♠ a blade streak, ♣ a glob that splats, ♥ pink motes, ♦ blue shards. */
 const LOOK: Record<Suit, { w: number; h: number; color: string; trail: string; spin: boolean; motes: number }> = {
-    S: { w: 34, h: 8, color: '#E8D9F0', trail: SUIT_COLOR_HEX.S, spin: false, motes: 1 },
-    C: { w: 16, h: 16, color: '#6FD08F', trail: SUIT_COLOR_HEX.C, spin: false, motes: 1 },
-    H: { w: 8, h: 8, color: '#FF8FB0', trail: '#C93038', spin: false, motes: 3 },
-    D: { w: 14, h: 14, color: '#8FB8E0', trail: SUIT_COLOR_HEX.D, spin: true, motes: 1 },
+    S: { w: 34, h: 8, color: '#ECECE0', trail: SUIT_COLOR_HEX.S, spin: false, motes: 1 },
+    C: { w: 16, h: 16, color: '#309C63', trail: SUIT_COLOR_HEX.C, spin: false, motes: 1 },
+    H: { w: 8, h: 8, color: '#D47564', trail: '#C93038', spin: false, motes: 3 },
+    D: { w: 14, h: 14, color: '#94D2D4', trail: SUIT_COLOR_HEX.D, spin: true, motes: 1 },
 };
 
 /**
@@ -88,7 +88,7 @@ export function launch(layer: Node, from: Vec3, to: Vec3, suit: Suit, onLand: ()
 /** ♣ lands as a splat: a few green drops thrown outward. */
 function splat(layer: Node, at: Vec3) {
     for (let i = 0; i < 6; i++) {
-        const s = square(layer, 'Splat', 8, 8, i % 2 ? '#4FB067' : '#6FD08F');
+        const s = square(layer, 'Splat', 8, 8, i % 2 ? '#3C5956' : '#309C63');
         s.node.setPosition(at);
         const ang = (Math.PI * 2 * i) / 6 + Math.random() * 0.5;
         const d = 24 + Math.random() * 16;
@@ -179,7 +179,7 @@ export class Rig {
 /** The lights dip (a boss twist): a dark sheet over the screen, in and out. */
 export function dimLights(screen: Node, seconds = 0.6) {
     const ut = screen.getComponent(UITransform)!;
-    const s = square(screen, 'Dim', ut.width + 8, ut.height + 8, '#0A0810');
+    const s = square(screen, 'Dim', ut.width + 8, ut.height + 8, '#16121C');
     const op = s.node.addComponent(UIOpacity);
     op.opacity = 0;
     tween(op).to(seconds * 0.3, { opacity: 150 }).delay(seconds * 0.3).to(seconds * 0.4, { opacity: 0 }).call(() => s.node.destroy()).start();
@@ -190,7 +190,7 @@ export function starBurst(layer: Node, world: Vec3, count = 16) {
     const at = toLocal(layer, world);
     for (let i = 0; i < count; i++) {
         const long = i % 2 === 0;
-        const s = square(layer, 'Star', long ? 40 : 22, 8, i % 4 === 0 ? '#ECECE0' : '#E9C46A');
+        const s = square(layer, 'Star', long ? 40 : 22, 8, i % 4 === 0 ? '#ECECE0' : '#FDD164');
         const ang = (Math.PI * 2 * i) / count;
         s.node.angle = ang * 180 / Math.PI;
         s.node.setPosition(at);

@@ -130,7 +130,7 @@ export function buildStrip(root: Node, g: TableRegions, round: number, phase: st
  * The Joker's card peeking over the top of your table (cut off by the table's top
  * rail), with his line beside him: the last thing that happened ("Round 3 won").
  */
-export function buildJoker(root: Node, g: TableRegions, cx: number, tableTop: number, message?: { title: string; body: string } | null): Node {
+export function buildJoker(root: Node, g: TableRegions, cx: number, tableTop: number, message?: { title: string; body: string } | null, quote = ''): Node {
     const kit = UiKit.get();
     const top = g.T - 6;
     const visible = Math.max(20, top - tableTop);
@@ -138,10 +138,14 @@ export function buildJoker(root: Node, g: TableRegions, cx: number, tableTop: nu
     const holder = makeNode(root, 'Joker', 180, visible, { x, y: top, anchorY: 1 });
     holder.addComponent(Mask).type = Mask.Type.GRAPHICS_RECT;
     makeSprite(holder, 'Card', kit.frame('cards/updated/joker_true'), 180, 252, { y: -126 });
+    // Beside his card: the round's news (round won, what you took), or one of his lines.
+    // jokerSay() (ui/joker.ts) writes into JokerQuote during the fight.
+    const mx = x + 104, mw = Math.min(500, g.R - 476 - 16 - mx);
     if (message) {
-        const mx = x + 104, mw = Math.min(500, g.R - 476 - 16 - mx);
         makeLabel(root, 'JokerTitle', message.title, { size: 21, color: GREY.text, align: 'left', x: mx, y: g.T - 42, width: mw, height: 28 });
         makeLabel(root, 'JokerLine', message.body, { font: 'body', size: 26, color: GREY.soft, align: 'left', x: mx, y: g.T - 72, width: mw, height: 30 });
+    } else {
+        makeLabel(root, 'JokerQuote', quote ? `“${quote}”` : '', { font: 'body', size: 28, color: GREY.soft, align: 'left', x: mx, y: g.T - 56, width: mw, height: 64 });
     }
     return holder;
 }

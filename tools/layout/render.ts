@@ -56,6 +56,46 @@ async function main() {
         const { celebrateAce } = await import('../../assets/scripts/ui/Modal');
         const { ACES } = await import('../../assets/scripts/core/achievements');
         celebrateAce(host, (a1 as any) ?? ACES[0].id);
+    } else if (screen === 'Title') {
+        // The title is a prefab: rebuild its named nodes from the prefab file, then let
+        // TitleScreen dress it as the game does at runtime.
+        const fs = await import('fs');
+        const { Color, Vec2 } = await import('cc') as any;
+        const d = JSON.parse(fs.readFileSync('assets/prefabs/screens/Title.prefab', 'utf8'));
+        const made = new Map<number, Node>();
+        const strips: Record<string, string> = { KSpades: 'anim/S_13', QHearts: 'anim/H_12', Joker: 'anim/joker_true', JClubs: 'anim/C_11', AHearts: 'anim/D_14' };
+        const build = (i: number, parent: Node) => {
+            const o = d[i];
+            const n = new Node(o._name ?? 'Node'); parent.addChild(n); made.set(i, n);
+            n.setPosition(o._lpos?.x ?? 0, o._lpos?.y ?? 0);
+            for (const c of o._components ?? []) {
+                const k = d[c.__id__];
+                if (k.__type__ === 'cc.UITransform') { const u = n.addComponent<UITransform>(UITransform); u.setContentSize(k._contentSize.width, k._contentSize.height); u.setAnchorPoint(k._anchorPoint.x, k._anchorPoint.y); }
+                if (k.__type__ === 'cc.Sprite') { const sp = n.addComponent<Sprite>(Sprite); sp.spriteFrame = new SpriteFrame(strips[n.name] ?? 'ui/panel'); }
+                if (k.__type__ === 'cc.Label') { const l = n.addComponent<Label>(Label); l.string = k._string; l.fontSize = k._fontSize; l.horizontalAlign = k._horizontalAlign; l.color = new Color(k._color.r, k._color.g, k._color.b, k._color.a); }
+            }
+            if (o._name === 'Buttons') return;
+            for (const ch of o._children ?? []) build(ch.__id__, n);
+        };
+        const root = d[1];
+        for (const ch of root._children ?? []) build(ch.__id__, host);
+        const { makeButton } = await import('../../assets/scripts/ui/UiKit');
+        const { ButtonStyle } = await import('../../assets/scripts/ui/UiButton');
+        const content = host.getChildByName('Content')!;
+        const names = ['Continue', 'New Run', 'How to play', 'Aces', 'Options', 'Quit'];
+        const btns = names.map((t, k) => makeButton(content, `Btn ${t}`, ButtonStyle.Dark, t, 666, 100, { x: 460, y: 370 - 117 * k }, () => undefined, 40));
+        const mod = await import('../../assets/scripts/ui/TitleScreen');
+        const comp: any = host.addComponent<any>(mod.TitleScreen);
+        [comp.continueButton, comp.newRunButton, comp.howToPlayButton, comp.achievementsButton, comp.optionsButton] = btns;
+        comp.bestRoundLabel = content.getChildByPath('BestRun/BestRound')?.getComponent(Label);
+        comp.bestScoreLabel = content.getChildByPath('BestRun/BestScore')?.getComponent(Label);
+        (Game as any).profile.bestRound = 23; (Game as any).profile.bestScore = 84210;
+        (Game as any).load = () => undefined;
+        comp.onShow();
+        void Vec2;
+    } else if (screen === 'Confirm') {
+        const { confirmBox } = await import('../../assets/scripts/ui/Modal');
+        confirmBox(host, 'REPLACE YOUR RUN?', 'You have a saved run. Starting a new one deletes it.', 'New Run', 'Keep it', () => undefined);
     } else {
         const mod = await import(`../../assets/scripts/ui/${screen}Screen`);
         if (process.env.SYNC) (await import('cc') as any).setSyncTweens(true);
@@ -81,6 +121,13 @@ async function main() {
             }
         }
         comp.onShow?.(params);
+        if (screen === 'RoundWon' && process.env.TOOK) {
+            // Step 1 done (their first card taken) and, with TOOK=cards, a reward picked.
+            await new Promise((r) => setTimeout(r, 20));
+            comp.takeId = (await import('../../assets/scripts/core/grid')).cardsOnGrid(params.run.opponent.grid)[0]?.id ?? null;
+            if (process.env.TOOK !== '1') comp.choice = { kind: process.env.TOOK };
+            comp.build();
+        }
         if (screen === 'Planning' && process.env.FORGE) { comp.forgeOpen = true; await new Promise((r) => setTimeout(r, 20)); comp.rebuild(); }
         if (process.env.FRAMES && screen === 'Fight') {
             // Stop part-way through a fight (tweens finish at once), for mockups.

@@ -27,13 +27,14 @@ export const FONT = {
     bodySmall: 27,
 };
 
+/** Text and fill colours, the open-table palette (style guide). Same values as kitC.INK_TEXT. */
 export const COLOR = {
-    ink: '#2B2438',
-    cream: '#EFEEE4',
-    lilac: '#C4BDD4',
-    dim: '#7A767A',
-    gold: '#E9C46A',
-    dark: '#1A1524',
+    ink: '#3B324A',
+    cream: '#ECECE0',
+    lilac: '#CFC6B8',
+    dim: '#6E6276',
+    gold: '#FDD164',
+    dark: '#16121C',
 };
 
 @ccclass('UiKit')
@@ -44,26 +45,12 @@ export class UiKit extends Component {
     @property({ type: TTFFont, tooltip: 'Pixelify Sans SemiBold (headings, buttons, small caps)' }) headingFont: TTFFont | null = null;
     @property({ type: TTFFont, tooltip: 'VT323 (body text, numbers)' }) bodyFont: TTFFont | null = null;
 
+    // Old generated button frames: shown only in the editor (at runtime UiButton draws the open-table
+    // buttons from ui/kitC.ts). Every other piece of the old kit is gone (phase 5b).
     @property({ type: [SpriteFrame], tooltip: 'Button frames, style order: Red, Cream, Blue, Dark' }) buttonNormal: SpriteFrame[] = [];
     @property({ type: [SpriteFrame], tooltip: 'Pressed frames, same order' }) buttonPressed: SpriteFrame[] = [];
     @property(SpriteFrame) buttonDisabled: SpriteFrame | null = null;
-
-    @property(SpriteFrame) panelCream: SpriteFrame | null = null;
-    @property(SpriteFrame) panelCreamSingle: SpriteFrame | null = null;
-    @property(SpriteFrame) panelDark: SpriteFrame | null = null;
-
-    @property(SpriteFrame) cardFrameGold: SpriteFrame | null = null;
-    @property(SpriteFrame) cardFramePink: SpriteFrame | null = null;
-    @property({ type: [SpriteFrame], tooltip: 'Empty slots, in order: 2x, 1.5x, 1x, 0.5x' }) cardSlots: SpriteFrame[] = [];
-
-    @property(SpriteFrame) cellAlive: SpriteFrame | null = null;
-    @property(SpriteFrame) cellLost: SpriteFrame | null = null;
-    @property(SpriteFrame) cellRotted: SpriteFrame | null = null;
-    @property({ type: SpriteFrame, tooltip: 'White ring, tinted in code for hit / heal / rot / shield flashes' }) ringWhite: SpriteFrame | null = null;
     @property({ type: SpriteFrame, tooltip: 'Small white square for sparks (tinted in code)' }) spark: SpriteFrame | null = null;
-    @property(SpriteFrame) barTrack: SpriteFrame | null = null;
-    @property(SpriteFrame) barFill: SpriteFrame | null = null;
-    @property(SpriteFrame) barFillGold: SpriteFrame | null = null;
 
     private frames = new Map<string, SpriteFrame>();
 
@@ -112,14 +99,6 @@ export class UiKit extends Component {
     suitIcon(suit: Suit): SpriteFrame | null { return this.frame(`ui/icons/suit_${suit}`); }
     /** Grey pip for a spent heal / armor charge. */
     spentIcon(suit: Suit): SpriteFrame | null { return this.frame(`ui/icons/suit_${suit}_spent`); }
-
-    /** Empty-slot frame closest to a card width. */
-    slotFor(cardWidth: number): SpriteFrame | null {
-        const widths = [180, 135, 90, 45];
-        let best = 0;
-        widths.forEach((w, i) => { if (Math.abs(w - cardWidth) < Math.abs(widths[best] - cardWidth)) best = i; });
-        return this.cardSlots[best] ?? null;
-    }
 }
 
 // ---- Node helpers ------------------------------------------------------------

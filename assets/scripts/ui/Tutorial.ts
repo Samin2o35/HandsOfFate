@@ -20,9 +20,9 @@ import { frame } from './kitC';
 
 export const TUTORIAL_STEPS = 6;
 
-/** Colours for words in the Dealer's lines (mockups 02–04). */
+/** Colours for words in the Dealer's lines: the deck's own colours, the lighter tone where the deck has one. */
 const C = {
-    gold: '#E9C46A', hearts: '#FF8FB0', diamonds: '#8FB8E0', spades: '#C38FD6', clubs: '#6FCF8A', red: '#E86A5F',
+    gold: '#FDD164', hearts: '#D47564', diamonds: '#94D2D4', spades: '#8E478C', clubs: '#309C63', red: '#C93038',
 };
 const w = (text: string, color: string) => `<color=${color}>${text}</color>`;
 

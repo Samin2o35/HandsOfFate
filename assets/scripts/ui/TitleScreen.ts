@@ -1,5 +1,5 @@
 // Hands of Fate — ui/TitleScreen.ts
-// Mockup 01. Six buttons, the best run panel and the logo plaque.
+// Mockup 01 (open table). Six buttons, the best run rail, the fanned hand and the name.
 // Hook each button's Click Events to the matching method below (onNewRun, ...),
 // or leave them empty: this script wires them up itself from the slots below.
 //
@@ -11,13 +11,23 @@
 //   Achievements the four Aces
 //   Quit         only shown on Android builds (iOS and web apps don't quit)
 
-import { _decorator, Label, game, sys, Button } from 'cc';
+import { _decorator, Label, game, sys, Button, Sprite, UITransform, Color, HorizontalTextAlignment } from 'cc';
+import { EDITOR } from 'cc/env';
 import { Sound } from '../app/Sound';
 import { GameScreen } from './GameScreen';
 import { UiButton, ButtonStyle } from './UiButton';
 import { Game, SPEED_NAME } from '../app/Game';
 import { ScreenManager } from '../app/ScreenManager';
 import { confirmBox } from './Modal';
+import { UiKit, makeLabel, FONT } from './UiKit';
+import { frame, rule, INK_TEXT } from './kitC';
+import { AnimatedCard } from './AnimatedCard';
+
+/** The title fan, left to right: strip and lift (px) of each card (mockup 01). Joker in the middle. */
+const FAN: [string, string, number][] = [
+    ['KSpades', 'anim/S_13', 28], ['QHearts', 'anim/H_12', 12], ['Joker', 'anim/joker_true', 0],
+    ['JClubs', 'anim/C_11', 12], ['AHearts', 'anim/D_14', 28],
+];
 const { ccclass, property } = _decorator;
 
 @ccclass('TitleScreen')
@@ -48,6 +58,68 @@ export class TitleScreen extends GameScreen {
             if (b) b.style = ButtonStyle.Dark;
         }
         if (this.quitButton) this.quitButton.node.active = sys.isNative && sys.os === sys.OS.ANDROID;
+        if (!EDITOR) UiKit.ready.then(() => { if (this.node.isValid) this.dress(); });
+        this.refresh();
+    }
+
+    private dressed = false;
+
+    /**
+     * The open table, laid over the prefab at runtime (no editor steps): the hand fanned
+     * in an open bracket captioned HANDS OF FATE, the name and lines under it, and the best
+     * run in a closed rail. The prefab's old plaque is hidden; its nodes stay for the editor.
+     */
+    private dress() {
+        if (this.dressed) return;
+        const content = this.node.getChildByName('Content');
+        if (!content) return;
+        this.dressed = true;
+        // Left: bracket 800 x 740 with its top-left at (80, 110) of the 1920 x 1080 screen.
+        const bracket = frame(content, 'TitleFrame', 800, 740, { x: -480, y: 60 }, { caption: 'HANDS OF FATE' });
+        bracket.setSiblingIndex(0);
+        const fan = content.getChildByName('Fan');
+        if (fan) {
+            fan.setPosition(-480, 250);
+            FAN.forEach(([name, strip, lift], k) => {
+                const card = fan.getChildByName(name);
+                if (!card) return;
+                card.setPosition(-250 + k * 125, -6 - lift);
+                card.getComponent(UITransform)?.setContentSize(180, 252);
+                card.setSiblingIndex(k);
+                const anim = card.getComponent(AnimatedCard);
+                if (anim && anim.strip !== strip) anim.load(strip);
+            });
+        }
+        const plaque = content.getChildByName('Plaque');
+        if (plaque) plaque.active = false;
+        makeLabel(content, 'Logo', 'HANDS OF FATE', { size: 88, spacing: 4, color: INK_TEXT.main, x: -480, y: -45 });
+        makeLabel(content, 'Tagline', 'Build poker hands. They fight for you.', { font: 'body', size: 40, color: INK_TEXT.red, x: -480, y: -120 });
+        rule(content, 'TitleRule', 640, -800, -172);
+        makeLabel(content, 'Modes', 'Endless  ·  Four Kings  ·  Four Aces', { font: 'body', size: 34, color: INK_TEXT.second, x: -480, y: -210 });
+
+        // Best run: a closed rail, BEST small on the left, the round and score in gold on the right.
+        const best = content.getChildByName('BestRun');
+        if (best) {
+            const back = best.getComponent(Sprite);
+            if (back) back.enabled = false;
+            frame(best, 'Rail', 666, 92, {}, { closed: true }).setSiblingIndex(0);
+            const style = (l: Label | null, size: number, col: string, x: number, right: boolean) => {
+                if (!l) return;
+                l.fontSize = size;
+                l.lineHeight = Math.round(size * 1.15);
+                l.color = new Color().fromHEX(col);
+                l.horizontalAlign = right ? HorizontalTextAlignment.RIGHT : HorizontalTextAlignment.LEFT;
+                l.node.getComponent(UITransform)?.setAnchorPoint(right ? 1 : 0, 0.5);
+                l.node.setPosition(x, 0);
+            };
+            const bestLabel = best.getChildByName('BestLabel')?.getComponent(Label) ?? null;
+            style(bestLabel, FONT.labelSmall + 4, INK_TEXT.second, -309, false);
+            if (bestLabel) bestLabel.string = 'BEST';
+            style(this.bestRoundLabel, 44, INK_TEXT.gold, 309, true);
+            if (this.bestScoreLabel) this.bestScoreLabel.node.active = false;
+        }
+        const credit = this.node.getChildByName('Credit')?.getComponent(Label);
+        if (credit) credit.color = new Color().fromHEX(INK_TEXT.quiet);
         this.refresh();
     }
 
@@ -60,6 +132,11 @@ export class TitleScreen extends GameScreen {
         }
         if (this.optionsButton) this.optionsButton.text = `Options · Speed: ${SPEED_NAME[Game.settings.speed]}`;
         const p = Game.profile;
+        if (this.dressed) {
+            // One line in the open table: "ROUND 23 · 84,210".
+            if (this.bestRoundLabel) this.bestRoundLabel.string = p.bestRound > 0 ? `ROUND ${p.bestRound}  ·  ${p.bestScore.toLocaleString('en-US')}` : '–';
+            return;
+        }
         if (this.bestScoreLabel) this.bestScoreLabel.string = p.bestScore.toLocaleString('en-US');
         if (this.bestRoundLabel) this.bestRoundLabel.string = p.bestRound > 0 ? `Round ${p.bestRound}` : '–';
     }

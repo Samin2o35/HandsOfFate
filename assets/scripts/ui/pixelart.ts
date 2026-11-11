@@ -13,7 +13,7 @@
 
 export type RGBA = readonly [number, number, number, number];
 
-function hex(h: string): RGBA {
+export function hex(h: string): RGBA {
     const s = h.replace('#', '');
     return [parseInt(s.slice(0, 2), 16), parseInt(s.slice(2, 4), 16), parseInt(s.slice(4, 6), 16), 255];
 }
@@ -213,5 +213,86 @@ export function dottedRect(w: number, h: number, col: RGBA): Pix {
 export function dottedRule(w: number, col: RGBA): Pix {
     const p = new Pix(w, 1);
     for (let k = 0; k < w; k += 4) for (const d of [0, 1]) p.set(k + d, 0, col);
+    return p;
+}
+
+/** A dotted oval (the boss's glow): n 2x2 dots spaced evenly round an ellipse filling w x h. */
+export function dottedOval(w: number, h: number, col: RGBA, n = 56): Pix {
+    const p = new Pix(w, h);
+    const rx = (w - 2) / 2, ry = (h - 2) / 2;
+    for (let i = 0; i < n; i++) {
+        const a = (i * 2 * Math.PI) / n;
+        const x = Math.round(rx + Math.cos(a) * rx), y = Math.round(ry + Math.sin(a) * ry);
+        for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) p.set(x + dx, y + dy, col);
+    }
+    return p;
+}
+
+/** A flat bar: `fill` art pixels of colour from the left, the rest clear (progress inside a rail). */
+export function bar(w: number, h: number, fill: number, col: RGBA): Pix {
+    const p = new Pix(w, h);
+    for (let y = 0; y < h; y++) for (let x = 0; x < Math.min(w, fill); x++) p.set(x, y, col);
+    return p;
+}
+
+/** The greyed version of a drawn icon: fills become the room colour, outlines soft. */
+export function muted(p: Pix): Pix {
+    const out = new Pix(p.w, p.h);
+    for (let y = 0; y < p.h; y++) for (let x = 0; x < p.w; x++) {
+        const c = p.get(x, y);
+        if (!c[3]) continue;
+        out.set(x, y, same(c, PAL.ink) || same(c, PAL.cream) || same(c, PAL.gold) ? PAL.soft : PAL.room1);
+    }
+    return out;
+}
+
+function blit(dst: Pix, src: Pix, ox: number, oy: number) {
+    for (let y = 0; y < src.h; y++) for (let x = 0; x < src.w; x++) {
+        const c = src.get(x, y);
+        if (c[3]) dst.set(ox + x, oy + y, c);
+    }
+}
+
+/** Health reward: two living cells with a gold plus over them (40 x 28). */
+export function rewardHealth(on = true): Pix {
+    const p = new Pix(40, 28);
+    blit(p, cell(14), 3, 11);
+    blit(p, cell(14), 21, 11);
+    for (let k = -3; k <= 3; k++) for (const d of [0, 1]) { p.set(20 + k, 4 + d, PAL.gold); p.set(20 + d, 4 + k, PAL.gold); }
+    return on ? p : muted(p);
+}
+
+/** A little card for the Grid picture: cream, ink edge with cut corners, one red pip (7 x 10). */
+function tinyCard(): Pix {
+    const p = new Pix(7, 10);
+    for (let y = 0; y < 10; y++) for (let x = 0; x < 7; x++) {
+        const corner = (x === 0 || x === 6) && (y === 0 || y === 9);
+        if (corner) continue;
+        const edge = x === 0 || x === 6 || y === 0 || y === 9;
+        p.set(x, y, edge ? PAL.ink : PAL.cream);
+    }
+    p.set(3, 4, PAL.red); p.set(3, 5, PAL.red);
+    return p;
+}
+
+/** Grid reward: two rows of little cards and a dotted gold row to come (25 x 34). */
+export function rewardGrid(on = true): Pix {
+    const p = new Pix(25, 34);
+    for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) {
+        const x = c * 9, y = r * 12;
+        blit(p, r < 2 ? tinyCard() : dottedRect(7, 10, PAL.gold), x, y);
+    }
+    return on ? p : muted(p);
+}
+
+/** A 1-pixel outline with the 2-pixel corner step, in white (tinted in code): the cell flash (n x n). */
+export function flashOutline(n: number): Pix {
+    const p = new Pix(n, n);
+    const W: RGBA = [255, 255, 255, 255];
+    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+        const dx = Math.min(x, n - 1 - x), dy = Math.min(y, n - 1 - y);
+        if (dx + dy < 2) continue;
+        if (dx === 0 || dy === 0 || dx + dy === 2) p.set(x, y, W);
+    }
     return p;
 }

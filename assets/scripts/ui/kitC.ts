@@ -42,7 +42,8 @@ export function buttonFrame(look: px.ButtonLook, pressed = false): SpriteFrame {
 
 // ---- Frames ---------------------------------------------------------------------------------------
 
-export interface FrameOpts { closed?: boolean; caption?: string; color?: 'cream' | 'soft'; fill?: 'room0' | 'red' | 'cream' }
+/** fill: a named colour, or any '#rrggbb' (a lit tier badge in the King's suit colour). */
+export interface FrameOpts { closed?: boolean; caption?: string; color?: 'cream' | 'soft'; fill?: 'room0' | 'red' | 'cream' | string }
 
 /**
  * A group's bracket (or a closed rail) w x h screen pixels, centred at `at` like
@@ -58,7 +59,7 @@ export function frame(parent: Node, name: string, w: number, h: number, at: Plac
         capW = Math.ceil((textWidth(cap) + 16) / 2);
     }
     const aw = art(w), ah = art(h);
-    const fill = o.fill === 'room0' ? px.PAL.room0 : o.fill === 'red' ? px.PAL.red : o.fill === 'cream' ? px.PAL.cream : undefined;
+    const fill = o.fill === 'room0' ? px.PAL.room0 : o.fill === 'red' ? px.PAL.red : o.fill === 'cream' ? px.PAL.cream : o.fill?.startsWith('#') ? px.hex(o.fill) : undefined;
     const key = `frame:${aw}x${ah}:${o.closed ? 1 : 0}:${capW}:${o.color ?? 'c'}:${o.fill ?? ''}`;
     const sf = toFrame(px.frame(aw, ah, { closed: o.closed, col, fill, capW }), key);
     const s = makeSprite(holder, 'Rail', sf, aw * 2, ah * 2);
@@ -89,6 +90,30 @@ export function ringFrame(w: number, h: number, kind: 'gold' | 'pink' | 'slot' |
     const aw = art(w), ah = art(h);
     const col = kind === 'gold' ? px.PAL.gold : kind === 'pink' ? px.PAL.redHi : kind === 'cream' ? px.PAL.cream : px.PAL.room1;
     return toFrame(px.dottedRect(aw, ah, col), `ring:${aw}x${ah}:${kind}`);
+}
+
+/** A dotted oval w x h screen pixels in any colour (the boss's glow in his suit colour). */
+export function ovalFrame(w: number, h: number, hexColor: string): SpriteFrame {
+    const aw = art(w), ah = art(h);
+    return toFrame(px.dottedOval(aw, ah, px.hex(hexColor)), `oval:${aw}x${ah}:${hexColor}`);
+}
+
+/** A flat progress fill `w` screen pixels long at `fraction`, 2 art px high, in a colour. */
+export function barFrame(w: number, fraction: number, hexColor: string): SpriteFrame {
+    const aw = art(w), f = Math.round(aw * Math.max(0, Math.min(1, fraction)));
+    return toFrame(px.bar(aw, 3, f, px.hex(hexColor)), `bar:${aw}:${f}:${hexColor}`);
+}
+
+/** The round-won reward pictures, lit or greyed (drawn here, not imported). */
+export function rewardIcon(kind: 'health' | 'grid', on: boolean): { frame: SpriteFrame; w: number; h: number } {
+    const p = kind === 'health' ? px.rewardHealth(on) : px.rewardGrid(on);
+    return { frame: toFrame(p, `reward:${kind}:${on ? 1 : 0}`), w: p.w * 2, h: p.h * 2 };
+}
+
+/** A white outline round a cell `size` screen pixels across, tinted for hit / heal / rot / shield. */
+export function flashFrame(size: number): { frame: SpriteFrame; px: number } {
+    const n = Math.max(6, Math.round(size / 2));
+    return { frame: toFrame(px.flashOutline(n), `flash:${n}`), px: n * 2 };
 }
 
 /** A health cell for a cell `size` screen pixels across (the art adds a 2 px margin). */
