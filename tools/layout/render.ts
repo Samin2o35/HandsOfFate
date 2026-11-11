@@ -4,6 +4,7 @@
 // Usage: npm run layout (all screens), or npx tsx --tsconfig tools/layout/tsconfig.json tools/layout/render.ts <screen> <w> <h> <out.json> [args]
 import { Node, UITransform, Label, Sprite, Button, SpriteFrame, RichText, Mask } from 'cc';
 import { UiKit } from '../../assets/scripts/ui/UiKit';
+import { Particles, particleStats } from '../../assets/scripts/ui/particles';
 
 const [screen, ws, hs, out, a1, a2] = process.argv.slice(2);
 const sw = Number(ws), sh = Number(hs);
@@ -112,6 +113,8 @@ async function main() {
         if (screen === 'Planning' || screen === 'Fight') {
             const run = a1 === 'tut' ? Run.newRun({ seed: 51, tutorial: true } as any) : sampleRun(Number(a2 ?? 5), a1 === 'boss' ? { suit: 'H', tier: 2 } : undefined);
             if (a1 && a1 !== 'tut' && a1 !== 'boss') fill(run, Number(a1));
+            if (process.env.FILL) fill(run, Number(process.env.FILL)); // e.g. FILL=5 with "boss 10"
+            if (process.env.SPEED) (Game as any).settings.speed = process.env.SPEED;
             if (a1 === 'tut' && Number(a2) >= 3) fill(run, 3);
             (Game as any).run = run;
             params = { run };
@@ -140,19 +143,43 @@ async function main() {
             const cc: any = await import('cc');
             cc.setSyncTweens(true);
             await new Promise((r) => setTimeout(r, 20));
-            for (let i = 0; i < Number(process.env.FRAMES) && !comp.ending; i++) comp.update(1 / 60);
+            for (let i = 0; i < Number(process.env.FRAMES) && !comp.ending; i++) { Particles.tick(1 / 60); comp.update(1 / 60); }
         }
         if (process.env.SIMULATE && screen === 'Fight') {
-            // Play the whole fight frame by frame (tweens finish at once) and report.
+            // Play the whole fight frame by frame and report. PERF=1: tweens run over time
+            // (like Cocos), so the per-frame work counts include projectiles and trails in flight.
             const cc: any = await import('cc');
-            cc.setSyncTweens(true);
+            if (process.env.PERF) cc.setTimedTweens(true); else cc.setSyncTweens(true);
             await new Promise((r) => setTimeout(r, 20));
             const { flow } = { flow: await import('../../assets/scripts/ui/flow') };
             (flow as any).finishRound = () => undefined;
             let frames = 0;
+            const { work } = cc;
+            const keys = Object.keys(work);
+            const sum: Record<string, number> = {}, max: Record<string, number> = {};
+            keys.forEach((k) => { sum[k] = 0; max[k] = 0; });
+            const live = (n: any): number => 1 + n.children.reduce((a: number, c: any) => a + live(c), 0);
+            const liveStart = live(host);
+            let liveMax = liveStart, tweenMax = 0;
             for (; frames < 60 * 200; frames++) {
+                const before = { ...work };
+                cc.tickTweens(1 / 60);
+                Particles.tick(1 / 60);
                 comp.update(1 / 60);
+                for (const k of keys) { const d = work[k] - before[k]; sum[k] += d; max[k] = Math.max(max[k], d); }
+                if (frames % 30 === 0) { liveMax = Math.max(liveMax, live(host)); tweenMax = Math.max(tweenMax, cc.activeTweens()); }
                 if (comp.ending) break;
+            }
+            if (process.env.PERF) {
+                const names = new Map<string, number>();
+                const count = (n: any) => { names.set(n.name, (names.get(n.name) ?? 0) + 1); n.children.forEach(count); };
+                count(host);
+                const top = [...names].sort((a, b) => b[1] - a[1]).slice(0, 12).map(([k, v]) => `${k}×${v}`).join(', ');
+                console.log(`PERF most common nodes at the end: ${top}`);
+                console.log(`PERF particles: made ${particleStats.made}, reused ${particleStats.reused}, skipped (over the caps) ${particleStats.skipped}`);
+                // Per frame, what Cocos would do: nodes added, label texts re-rendered, sprite frames and colours set, textures made.
+                console.log(`PERF frames=${frames} live nodes start=${liveStart} max=${liveMax} end=${live(host)} tweens max=${tweenMax}`);
+                for (const k of keys) console.log(`PERF ${k.padEnd(10)} avg/frame ${(sum[k] / Math.max(1, frames)).toFixed(1).padStart(7)}  max ${String(max[k]).padStart(5)}  total ${sum[k]}`);
             }
             console.log(`SIM frames=${frames} ending=${comp.ending} inFlight=${comp.inFlight} winner=${comp.fight?.winner} events-ok`);
         }
@@ -197,7 +224,9 @@ async function main() {
                 ? '#' + [spr.color.r, spr.color.g, spr.color.b].map((v: number) => v.toString(16).padStart(2, '0')).join('') : undefined;
             const frame = spr?.spriteFrame?.name as string | undefined;
             if (frame?.startsWith('kitC:') && !frames[frame]) {
-                const src = spr.spriteFrame.texture?.image?.src;
+                // kitC keeps each piece's own pixels on its frame (_pix), as a page holds many.
+                const pix = spr.spriteFrame._pix;
+                const src = pix ? { width: pix.w, height: pix.h, _data: pix.data } : spr.spriteFrame.texture?.image?.src;
                 if (src) frames[frame] = { w: src.width, h: src.height, slice: spr.spriteFrame.insetLeft, data: Buffer.from(src._data).toString('base64') };
             }
             const tint = spr && spr.spriteFrame && spr.color && !(spr.color.r === 255 && spr.color.g === 255 && spr.color.b === 255)

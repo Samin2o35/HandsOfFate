@@ -53,4 +53,3 @@ export const EFFECT_CHARGES: Record<Effect, number> = {
 
 /** Shortest straight or flush that counts (GDD: "count from 3 cards up"). */
 export const MIN_STRAIGHT = 3;
-export const MIN_FLUSH = 3;

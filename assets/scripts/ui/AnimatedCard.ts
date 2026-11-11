@@ -10,8 +10,6 @@ import { _decorator, Component, Sprite, SpriteFrame, Texture2D, Rect, Size, Vec2
 import { ANIM_FRAMES } from '../core/cards';
 const { ccclass, property, requireComponent } = _decorator;
 
-const FRAME_W = 360;
-const FRAME_H = 504;
 
 @ccclass('AnimatedCard')
 @requireComponent(Sprite)
@@ -36,16 +34,20 @@ export class AnimatedCard extends Component {
     /** Switches to another strip at runtime (e.g. a different boss). */
     load(strip: string) {
         this.strip = strip;
-        resources.load(`${strip}/texture`, Texture2D, (err, tex) => {
-            if (err || !tex) { console.error(`Missing animation strip: ${strip}`, err); return; }
+        // The 1x copy of the strip (anim/X → anim1x/X, tools/art/make_atlas_1x.py): the same pixels at
+        // every size the game draws, a sixteenth of the memory. Falls back to the 4x file.
+        const small = strip.startsWith('anim/') ? `anim1x/${strip.slice(5)}` : '';
+        const use = (tex: Texture2D) => {
             if (this.strip !== strip) return; // a newer load() replaced this one
+            tex.setFilters(Texture2D.Filter.NEAREST, Texture2D.Filter.NEAREST);
+            const fw = Math.round(tex.width / ANIM_FRAMES), fh = tex.height;
             this.frames = [];
             for (let i = 0; i < ANIM_FRAMES; i++) {
                 const frame = new SpriteFrame();
                 frame.reset({
                     texture: tex,
-                    rect: new Rect(i * FRAME_W, 0, FRAME_W, FRAME_H),
-                    originalSize: new Size(FRAME_W, FRAME_H),
+                    rect: new Rect(i * fw, 0, fw, fh),
+                    originalSize: new Size(fw, fh),
                     offset: new Vec2(0, 0),
                     isRotate: false,
                 });
@@ -54,7 +56,13 @@ export class AnimatedCard extends Component {
             this.loadedStrip = strip;
             this.time = this.randomStart ? Math.random() * ANIM_FRAMES / this.fps : 0;
             this.showFrame();
+        };
+        const big = () => resources.load(`${strip}/texture`, Texture2D, (err, tex) => {
+            if (err || !tex) { console.error(`Missing animation strip: ${strip}`, err); return; }
+            use(tex);
         });
+        if (!small) { big(); return; }
+        resources.load(`${small}/texture`, Texture2D, (err, tex) => { if (err || !tex) big(); else use(tex); });
     }
 
     update(dt: number) {

@@ -18,7 +18,7 @@ import sys
 from PIL import Image, ImageDraw
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import make_style_sample as st  # noqa: E402  (palette, fonts, pips)
+import artbase as st  # noqa: E402  (palette, fonts, pips)
 
 INK, CREAM, CREAM2 = st.INK, st.CREAM, st.CREAM2
 RED, RED_HI, RED_LO = st.RED, st.RED_HI, st.RED_LO

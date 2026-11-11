@@ -9,11 +9,13 @@
 
 import {
     _decorator, Component, Node, Sprite, SpriteFrame, Label, TTFFont, UITransform, Color,
-    Button, resources, Vec3, HorizontalTextAlignment, VerticalTextAlignment,
+    Button, resources, Vec3, HorizontalTextAlignment, VerticalTextAlignment, Texture2D, Rect, Size, Vec2,
 } from 'cc';
 import { Sound } from '../app/Sound';
 import { Card, RANKS, SUITS, Suit, updatedArtPath, classicArtPath, CARD_BACK_PATH, DEALER_CARD_PATH } from '../core/cards';
 import { UiButton, ButtonStyle } from './UiButton';
+import { whiteFrame } from './kitC';
+import { CARD_ATLAS, CARD_ATLAS_W, CARD_ATLAS_H, CARD_RECTS } from './cardAtlas';
 const { ccclass, property } = _decorator;
 
 /** Font sizes in one place. VT323 renders small in Cocos, so its sizes are bigger. */
@@ -45,12 +47,8 @@ export class UiKit extends Component {
     @property({ type: TTFFont, tooltip: 'Pixelify Sans SemiBold (headings, buttons, small caps)' }) headingFont: TTFFont | null = null;
     @property({ type: TTFFont, tooltip: 'VT323 (body text, numbers)' }) bodyFont: TTFFont | null = null;
 
-    // Old generated button frames: shown only in the editor (at runtime UiButton draws the open-table
-    // buttons from ui/kitC.ts). Every other piece of the old kit is gone (phase 5b).
-    @property({ type: [SpriteFrame], tooltip: 'Button frames, style order: Red, Cream, Blue, Dark' }) buttonNormal: SpriteFrame[] = [];
-    @property({ type: [SpriteFrame], tooltip: 'Pressed frames, same order' }) buttonPressed: SpriteFrame[] = [];
-    @property(SpriteFrame) buttonDisabled: SpriteFrame | null = null;
-    @property({ type: SpriteFrame, tooltip: 'Small white square for sparks (tinted in code)' }) spark: SpriteFrame | null = null;
+    /** A plain white square (dims, covers, sparks; tinted in code). Drawn at runtime by kitC (Stage B). */
+    get spark(): SpriteFrame { return whiteFrame(); }
 
     private frames = new Map<string, SpriteFrame>();
 
@@ -74,25 +72,45 @@ export class UiKit extends Component {
     }
 
     /** Every resources path that frame() can return; anything else is null (decision 133). */
-    static readonly PRELOAD_EXTRA: readonly string[] = [CARD_BACK_PATH, DEALER_CARD_PATH, 'concept/king_roughout', 'concept/king_fallen_1x', 'ui/icons/reward_health', 'ui/icons/reward_grid'];
+    static readonly PRELOAD_EXTRA: readonly string[] = [CARD_BACK_PATH, DEALER_CARD_PATH, 'concept/king_fallen_1x'];
 
     private preload(): Promise<void> {
-        const paths: string[] = UiKit.PRELOAD_EXTRA.slice();
+        const single: string[] = UiKit.PRELOAD_EXTRA.slice();
         for (const suit of SUITS) {
-            paths.push(`ui/icons/suit_${suit}`);
-            paths.push(`ui/icons/suit_${suit}_spent`);
-            for (const rank of RANKS) {
-                paths.push(updatedArtPath({ suit, rank }));
-                paths.push(classicArtPath({ suit, rank }));
-            }
+            single.push(`ui/icons/suit_${suit}`);
+            single.push(`ui/icons/suit_${suit}_spent`);
         }
-        return Promise.all(paths.map((p) => new Promise<void>((resolve) => {
+        const one = (p: string) => new Promise<void>((resolve) => {
             resources.load(`${p}/spriteFrame`, SpriteFrame, (err, frame) => {
                 if (err || !frame) console.error(`Missing art: ${p}`, err);
                 else this.frames.set(p, frame);
                 resolve();
             });
-        }))).then(() => undefined);
+        });
+        // Every card of both decks comes from one 1x atlas (tools/art/make_atlas_1x.py, decision 144):
+        // the same pixels as the 4x files at every size the game draws, in one texture.
+        const cards = new Promise<void>((resolve) => {
+            resources.load(`${CARD_ATLAS}/texture`, Texture2D, (err, tex) => {
+                if (err || !tex) {
+                    console.warn('Card atlas missing: loading every card file instead (run tools/art/make_atlas_1x.py).', err);
+                    const paths: string[] = [];
+                    for (const suit of SUITS) for (const rank of RANKS) paths.push(updatedArtPath({ suit, rank }), classicArtPath({ suit, rank }));
+                    Promise.all(paths.concat([CARD_BACK_PATH, DEALER_CARD_PATH]).map(one)).then(() => resolve());
+                    return;
+                }
+                tex.setFilters(Texture2D.Filter.NEAREST, Texture2D.Filter.NEAREST);
+                for (const path of Object.keys(CARD_RECTS)) {
+                    const [x, y] = CARD_RECTS[path];
+                    const sf = new SpriteFrame();
+                    sf.reset({ texture: tex, rect: new Rect(x, y, CARD_ATLAS_W, CARD_ATLAS_H), originalSize: new Size(CARD_ATLAS_W, CARD_ATLAS_H), offset: new Vec2(0, 0), isRotate: false });
+                    sf.packable = false;
+                    sf.name = path;
+                    this.frames.set(path, sf);
+                }
+                resolve();
+            });
+        });
+        return Promise.all(single.filter((p) => !(p in CARD_RECTS)).map(one).concat([cards])).then(() => undefined);
     }
 
     /** A preloaded frame by resources path ("cards/updated/S_13"), or null. */
@@ -181,7 +199,6 @@ export function makeLabel(parent: Node, name: string, text: string, style: TextS
 
 /** A UiButton built in code, with its frames taken from the kit. */
 export function makeButton(parent: Node, name: string, style: ButtonStyle, text: string, w: number, h: number, at: Place, onClick: () => void, fontSize = FONT.button): UiButton {
-    const kit = UiKit.get();
     const n = makeNode(parent, name, w, h, at);
     const s = n.addComponent(Sprite);
     s.sizeMode = Sprite.SizeMode.CUSTOM;
@@ -189,9 +206,6 @@ export function makeButton(parent: Node, name: string, style: ButtonStyle, text:
     n.addComponent(Button);
     const label = makeLabel(n, 'Label', text, { size: fontSize });
     const b = n.addComponent(UiButton);
-    b.normalFrames = kit.buttonNormal;
-    b.pressedFrames = kit.buttonPressed;
-    b.disabledFrame = kit.buttonDisabled;
     b.label = label;
     b.text = text;
     b.style = style;

@@ -20,7 +20,7 @@ import sys
 from PIL import Image, ImageDraw, ImageFont
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import make_style_sample as st          # noqa: E402  palette, fonts, pips, text
+import artbase as st                    # noqa: E402  palette, fonts, pips, text
 import make_style_options as so         # noqa: E402  rail, stock, medallion, cell
 
 INK, CREAM, CREAM2 = st.INK, st.CREAM, st.CREAM2

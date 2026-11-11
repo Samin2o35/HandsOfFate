@@ -3,7 +3,7 @@
 // in a shuffled cycle: you meet all four before any repeats. Each twist gets one
 // tier stronger per meeting (tier = number of meetings, so the first is tier 1).
 
-import { Suit, SUIT_SYMBOL } from './cards';
+import { Suit } from './cards';
 import { Fight, FightEvent, FightModifier, FightSideSetup } from './fight';
 import { HealthGrid, cellIndexAt, createHealthGrid } from './health';
 import { Rng } from './rng';
@@ -65,8 +65,6 @@ export function meetingText(tier: number): string {
     const words = ['First', 'Second', 'Third', 'Fourth', 'Fifth', 'Sixth', 'Seventh', 'Eighth', 'Ninth', 'Tenth'];
     return `${words[tier - 1] ?? `${tier}th`} meeting`;
 }
-
-export const bossLabel = (suit: Suit) => `${SUIT_SYMBOL[suit]} ${BOSSES[suit].name}`;
 
 // ---- Boss order ------------------------------------------------------------
 

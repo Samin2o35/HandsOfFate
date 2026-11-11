@@ -41,6 +41,9 @@ export class Component {
     schedule() {} unschedule() {} unscheduleAllCallbacks() {}
 }
 
+/** Work counters for `npm run perf` (tools/layout/perf.mjs): what Cocos would have to do. */
+export const work = { nodes: 0, labels: 0, frames: 0, textures: 0, uploads: 0, colors: 0, destroyed: 0 };
+
 export class Node {
     children: Node[] = [];
     parent: Node | null = null;
@@ -51,9 +54,9 @@ export class Node {
     active = true;
     isValid = true;
     constructor(public name = '') {}
-    addChild(n: Node) { n.parent = this; this.children.push(n); }
+    addChild(n: Node) { n.parent = this; this.children.push(n); work.nodes++; }
     removeFromParent() { if (this.parent) this.parent.children = this.parent.children.filter((c) => c !== this); this.parent = null; }
-    destroy() { this.isValid = false; this.removeFromParent(); return true; }
+    destroy() { this.isValid = false; this.removeFromParent(); work.destroyed++; return true; }
     setParent(p: Node) { this.removeFromParent(); p.addChild(this); }
     setPosition(x: any, y?: number, z?: number) { if (typeof x === 'object') this.position = new Vec3(x.x, x.y, x.z ?? 0); else this.position = new Vec3(x, y ?? 0, z ?? 0); }
     getPosition() { return this.position.clone(); }
@@ -86,14 +89,19 @@ export class UITransform extends Component {
 }
 
 export class SpriteFrame {
-    texture: any = null; packable = true; insetLeft = 0; insetRight = 0; insetTop = 0; insetBottom = 0;
+    texture: any = null; rect: any = null; packable = true; insetLeft = 0; insetRight = 0; insetTop = 0; insetBottom = 0;
     constructor(public name = '') {}
-    reset() {}
+    reset(info?: any) { if (info?.texture) this.texture = info.texture; if (info?.rect) this.rect = info.rect; }
 }
 /** Keeps the pixels a texture was made from, so the layout tool can paint them. */
 export class ImageAsset { constructor(public src: any = null) {} }
 export class Texture2D {
-    image: any = null;
+    width = 0; height = 0;
+    private _image: any = null;
+    get image() { return this._image; }
+    set image(v: any) { this._image = v; work.textures++; }
+    reset(_info: any) { work.textures++; }
+    uploadData(_d: any) { work.uploads++; }
     setFilters() {} setWrapMode() {}
     static PixelFormat = { RGBA8888: 35 };
     static Filter = { NEAREST: 2, LINEAR: 1 };
@@ -102,7 +110,12 @@ export class Texture2D {
 export class TTFFont {}
 export class Font {}
 export class Sprite extends Component {
-    spriteFrame: SpriteFrame | null = null; sizeMode = 0; type = 0; color = new Color();
+    private _sf: SpriteFrame | null = null; private _col = new Color();
+    get spriteFrame() { return this._sf; }
+    set spriteFrame(v: SpriteFrame | null) { if (v !== this._sf) work.frames++; this._sf = v; }
+    get color() { return this._col; }
+    set color(v: Color) { work.colors++; this._col = v; }
+    sizeMode = 0; type = 0;
     static SizeMode = { CUSTOM: 0, TRIMMED: 1, RAW: 2 };
     static Type = { SIMPLE: 0, SLICED: 1, TILED: 2, FILLED: 3 };
 }
@@ -117,7 +130,7 @@ export class Label extends Component {
     horizontalAlign = 1; verticalAlign = 1; spacingX = 0; overflow = 0; enableWrapText = false;
     static Overflow = { NONE: 0, CLAMP: 1, SHRINK: 2, RESIZE_HEIGHT: 3 };
     get string() { return this._string; }
-    set string(v: string) { this._string = String(v); this.measure(); }
+    set string(v: string) { const t = String(v); if (t !== this._string) work.labels++; this._string = t; this.measure(); }
     /** 'body' when the screen passed the body font; the mock UiKit marks its fonts by name. */
     get kind(): 'heading' | 'body' { return this.font?.kind === 'body' ? 'body' : 'heading'; }
     measure() {
@@ -170,23 +183,84 @@ export class EventTouch { getUILocation() { return new Vec2(); } }
 export class Camera extends Component {}
 export function instantiate(p: any) { return new Node(p?.data?.name ?? 'Instance'); }
 
-/** Tweens run instantly at start(): 'to'/'by' jump to the end (calling onUpdate), 'call' runs. */
+/**
+ * Tweens. With setSyncTweens(true) they run instantly at start() ('to'/'by' jump to the end,
+ * calling onUpdate; 'call' runs). With setTimedTweens(true) they run over time like Cocos's,
+ * advanced by tickTweens(dt), so `npm run perf` sees projectiles, trails and numbers live.
+ * Otherwise they never run.
+ */
 export let syncTweens = false;
 export function setSyncTweens(on: boolean) { syncTweens = on; }
+let timedTweens = false;
+export function setTimedTweens(on: boolean) { timedTweens = on; }
+type Step = { kind: 'to' | 'by' | 'delay' | 'call'; d: number; props?: any; opts?: any; fn?: () => void };
+interface Running { target: any; steps: Step[]; i: number; t: number; from: Record<string, any> | null; }
+const running: Running[] = [];
+export function activeTweens() { return running.length; }
+const isVec = (v: any) => v && typeof v === 'object' && 'x' in v && 'y' in v;
+function begin(r: Running) {
+    const st = r.steps[r.i];
+    r.from = {};
+    if ((st.kind === 'to' || st.kind === 'by') && r.target) {
+        for (const key of Object.keys(st.props ?? {})) { const v = r.target[key]; r.from[key] = isVec(v) ? new Vec3(v.x, v.y, v.z ?? 0) : v; }
+    }
+}
+function apply(r: Running, k: number) {
+    const st = r.steps[r.i];
+    if (!r.target || !st.props) return;
+    for (const key of Object.keys(st.props)) {
+        const a = r.from![key], b = st.props[key];
+        let v: any;
+        if (isVec(a)) {
+            const end = st.kind === 'by' ? new Vec3(a.x + b.x, a.y + b.y, 0) : b;
+            v = new Vec3(a.x + (end.x - a.x) * k, a.y + (end.y - a.y) * k, 0);
+        } else if (typeof a === 'number') {
+            const end = st.kind === 'by' ? a + b : b;
+            v = a + (end - a) * k;
+        } else v = b;
+        try { r.target[key] = v; } catch { /* readonly */ }
+    }
+}
+/** Advances every timed tween by dt seconds. */
+export function tickTweens(dt: number) {
+    for (const r of running.slice()) {
+        let left = dt;
+        while (r.i < r.steps.length) {
+            const st = r.steps[r.i];
+            if (r.from === null) begin(r);
+            if (st.kind === 'call') { st.fn?.(); r.i++; r.from = null; continue; }
+            const need = st.d - r.t;
+            const used = Math.min(left, need);
+            r.t += used; left -= used;
+            const k = st.d > 0 ? Math.min(1, r.t / st.d) : 1;
+            if (st.kind !== 'delay') { apply(r, k); st.opts?.onUpdate?.(); }
+            if (r.t >= st.d) { r.i++; r.t = 0; r.from = null; continue; }
+            break;
+        }
+        if (r.i >= r.steps.length) running.splice(running.indexOf(r), 1);
+    }
+}
 function chain(target: any): any {
-    const steps: (() => void)[] = [];
+    const steps: Step[] = [];
+    const sync: (() => void)[] = [];
     const t: any = new Proxy(function () {}, {
         get: (_o, k) => {
             if (k === 'then') return undefined;
-            if (k === 'to' || k === 'by') return (_d: number, props: any, opts?: any) => {
-                steps.push(() => {
+            if (k === 'to' || k === 'by') return (d: number, props: any, opts?: any) => {
+                steps.push({ kind: k, d, props, opts });
+                sync.push(() => {
                     if (target && props) for (const key of Object.keys(props)) { try { target[key] = props[key]; } catch { /* readonly */ } }
                     opts?.onUpdate?.();
                 });
                 return t;
             };
-            if (k === 'call') return (fn: () => void) => { steps.push(fn); return t; };
-            if (k === 'start') return () => { if (syncTweens) for (const s of steps) s(); return t; };
+            if (k === 'delay') return (d: number) => { steps.push({ kind: 'delay', d }); return t; };
+            if (k === 'call') return (fn: () => void) => { steps.push({ kind: 'call', d: 0, fn }); sync.push(fn); return t; };
+            if (k === 'start') return () => {
+                if (syncTweens) for (const s of sync) s();
+                else if (timedTweens) running.push({ target, steps, i: 0, t: 0, from: null });
+                return t;
+            };
             return () => t;
         },
         apply: () => t,
@@ -194,7 +268,7 @@ function chain(target: any): any {
     return t;
 }
 export function tween(target?: any): any { return chain(target); }
-export const Tween = { stopAllByTarget() {} };
+export const Tween = { stopAllByTarget(target: any) { for (let i = running.length - 1; i >= 0; i--) if (running[i].target === target) running.splice(i, 1); } };
 
 const store = new Map<string, string>();
 export const sys = {
@@ -202,7 +276,8 @@ export const sys = {
     isNative: false, isMobile: false, os: 'web', OS: { ANDROID: 'Android', IOS: 'iOS' }, platform: 'web',
 };
 export const game = { end() {}, frameRate: 60 };
-export const director = { getScene: () => null, getTotalTime: () => 0, getDeltaTime: () => 1 / 60 };
+export const director = { getScene: () => null, getTotalTime: () => 0, getDeltaTime: () => 1 / 60, once(_e: string, fn: () => void) { fn(); } };
+export const Director = { EVENT_BEFORE_DRAW: 'director_before_draw' };
 export const screen = { windowSize: new Size(1920, 1080), on() {}, off() {} };
 export const view = { setDesignResolutionSize() {}, getVisibleSize: () => new Size(1920, 1080), on() {}, off() {} };
 export const ResolutionPolicy = { FIXED_WIDTH: 0, FIXED_HEIGHT: 1, SHOW_ALL: 2 };
@@ -221,6 +296,16 @@ function resourceExists(p: string): boolean {
 export const resources = {
     load(p: string, _t: any, cb: any) {
         if (!resourceExists(p)) { missingResources.add(p); cb?.(new Error(`no file for ${p}`), null); return; }
+        if (_t === Texture2D) {
+            // A texture with the PNG's real size (read from its header), for code that cuts frames from it.
+            const t = new Texture2D();
+            try {
+                const b = nodeFs.readFileSync('assets/resources/' + p.replace(/\/texture$/, '') + '.png');
+                t.width = b.readUInt32BE(16); t.height = b.readUInt32BE(20);
+            } catch { /* not a png */ }
+            cb?.(null, t);
+            return;
+        }
         cb?.(null, new SpriteFrame(p));
     },
     loadDir(_p: string, _t: any, cb: any) { cb?.(null, []); },

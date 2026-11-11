@@ -7,7 +7,7 @@
 //  - at least one attack hand (anti-stall)
 //  - about half its cards in its avatar's suit
 
-import { Card, Rank, RANKS, Suit, SUITS, SUIT_NAME, makeCard } from './cards';
+import { Card, RANKS, Suit, SUITS, SUIT_NAME, makeCard } from './cards';
 import { Grid, createGrid, cardsOnGrid } from './grid';
 import { evaluateBoard } from './evaluate';
 import { HealthGrid, createHealthGrid } from './health';
@@ -166,9 +166,4 @@ function tableCost(g: Grid, suit: Suit, budget: number): number {
     const wanted = cards.length / 2;
     if (Math.abs(inSuit - wanted) > 1) cost += 50 * (Math.abs(inSuit - wanted) - 1);
     return cost;
-}
-
-/** Copy of a card for the player to keep (fresh id assigned by the run). */
-export function copyOf(card: Card): { suit: Suit; rank: Rank } {
-    return { suit: card.suit, rank: card.rank };
 }

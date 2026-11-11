@@ -13,7 +13,7 @@
 // Sizes are 1920×1080 design pixels; very wide or tall screens keep a centred
 // 1920×1200 band (see tableRegions).
 
-import { Node, UITransform, Sprite, Rect, Label, Mask, Color } from 'cc';
+import { Node, UITransform, Sprite, Label, Mask, Color } from 'cc';
 import { Hand } from '../core/evaluate';
 import { HAND_INFO, EFFECT_NAME, EFFECT_CHARGES } from '../core/hands';
 import { Opponent } from '../core/opponents';
@@ -42,10 +42,6 @@ export function box(parent: Node, name: string, w: number, h: number, at: { x?: 
     const s = makeSprite(parent, name, UiKit.get().spark, w, h, at);
     s.color = new Color().fromHEX(color);
     return s;
-}
-
-export function setBoxColor(s: Sprite | null, color: string) {
-    if (s?.isValid) s.color = new Color().fromHEX(color);
 }
 
 // ---- Regions --------------------------------------------------------------------------
@@ -161,6 +157,8 @@ export interface BadgeParts {
     back: Sprite;
     pip: Sprite | null;
     hand: Hand | null;
+    /** What paintBadge last showed (so it only touches the sprites when that changes). */
+    shownSpent?: boolean;
 }
 
 /**
@@ -180,8 +178,9 @@ export function buildBadge(parent: Node, name: string, hand: Hand | null, full: 
 /** The timer: `progress` 0..1 of the way to firing; a spent hand goes dark. */
 export function paintBadge(b: BadgeParts, progress: number, spent = false) {
     if (!b.hand || !b.back.isValid) return;
-    b.back.spriteFrame = medallionFrame(spent ? 0 : progress * 12);
-    if (b.pip) b.pip.color = new Color().fromHEX(spent ? GREY.dim : '#FFFFFF');
+    const f = medallionFrame(spent ? 0 : progress * 12);
+    if (b.back.spriteFrame !== f) b.back.spriteFrame = f;
+    if (b.pip && b.shownSpent !== spent) { b.shownSpent = spent; b.pip.color = new Color().fromHEX(spent ? GREY.dim : '#FFFFFF'); }
 }
 
 /** A firing hand's medallion lights gold. */
@@ -374,8 +373,5 @@ export function buildOpponentPanel(root: Node, r: Region, o: Opponent, hands: re
 export function setCount(b: HealthBlock, g: HealthGrid) {
     if (b.count.isValid) b.count.string = String(g.cells.filter((c) => c.state === 'alive').length);
 }
-
-/** World rectangle of a node (tutorial spotlights). */
-export function rectOf(n: Node): Rect { return n.getComponent(UITransform)!.getBoundingBoxToWorld(); }
 
 export type { Suit };

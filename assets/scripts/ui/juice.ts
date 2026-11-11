@@ -4,10 +4,11 @@
 // All of it is visual: the fight rules run exactly as before, only the picture
 // waits for the projectile (see FightScreen).
 
-import { Node, Vec3, Color, UITransform, UIOpacity, Sprite, tween, Tween, Label, Vec2 } from 'cc';
+import { Node, Vec3, Color, UITransform, UIOpacity, Sprite, tween, Tween } from 'cc';
 import { Suit, SUIT_COLOR_HEX } from '../core/cards';
 import { Game } from '../app/Game';
-import { UiKit, makeSprite, makeLabel, FONT } from './UiKit';
+import { UiKit, makeSprite } from './UiKit';
+import { Particles, EASE } from './particles';
 
 export const FLIGHT = 0.38;   // seconds a projectile takes (real time, so speed doesn't change it)
 
@@ -21,11 +22,6 @@ function square(layer: Node, name: string, w: number, h: number, color: string):
     return s;
 }
 
-function fade(n: Node, seconds: number, delay = 0) {
-    const op = n.getComponent(UIOpacity) ?? n.addComponent(UIOpacity);
-    tween(op).delay(delay).to(seconds, { opacity: 0 }).call(() => { if (n.isValid) n.destroy(); }).start();
-}
-
 /** What each suit throws: ♠ a blade streak, ♣ a glob that splats, ♥ pink motes, ♦ blue shards. */
 const LOOK: Record<Suit, { w: number; h: number; color: string; trail: string; spin: boolean; motes: number }> = {
     S: { w: 34, h: 8, color: '#ECECE0', trail: SUIT_COLOR_HEX.S, spin: false, motes: 1 },
@@ -37,63 +33,39 @@ const LOOK: Record<Suit, { w: number; h: number; color: string; trail: string; s
 /**
  * Flies from `from` to `to` (world positions) on a curve, leaving a trail, then
  * calls onLand. Hearts send a few small motes; the last one to land calls onLand.
+ * The pieces are pooled (ui/particles.ts); past its cap a shot flies unseen but still lands on time.
  */
 export function launch(layer: Node, from: Vec3, to: Vec3, suit: Suit, onLand: () => void, delay = 0) {
     const look = LOOK[suit];
     const a = toLocal(layer, from), b = toLocal(layer, to);
     let landed = 0;
     for (let m = 0; m < look.motes; m++) {
-        const s = square(layer, `Shot ${suit}`, look.w, look.h, look.color);
-        const n = s.node;
-        n.setPosition(a);
-        n.active = false;
         // The curve bows to one side; hearts' motes each take a slightly different path.
         const dx = b.x - a.x, dy = b.y - a.y;
         const len = Math.max(1, Math.hypot(dx, dy));
         const bow = (0.22 + m * 0.12) * len * (m % 2 ? -1 : 1) * (dx >= 0 ? 1 : -1);
         const ctrl = new Vec3((a.x + b.x) / 2 - (dy / len) * bow, (a.y + b.y) / 2 + (dx / len) * bow + len * 0.15, 0);
-        if (suit === 'D') n.angle = 45;
-        const p = { t: 0 };
-        let lastTrail = new Vec3(a);
-        tween(p).delay(delay + m * 0.04).call(() => { n.active = true; })
-            .to(FLIGHT, { t: 1 }, {
-                easing: 'sineIn',
-                onUpdate: () => {
-                    if (!n.isValid) return;
-                    const t = p.t, u = 1 - t;
-                    const x = u * u * a.x + 2 * u * t * ctrl.x + t * t * b.x;
-                    const y = u * u * a.y + 2 * u * t * ctrl.y + t * t * b.y;
-                    // Blades point where they're going.
-                    if (suit === 'S') n.angle = Math.atan2(y - n.position.y, x - n.position.x) * 180 / Math.PI;
-                    if (look.spin) n.angle += 18;
-                    n.setPosition(x, y, 0);
-                    if (layer.isValid && Vec3.distance(lastTrail, n.position) > 14) {
-                        const tr = square(layer, 'Trail', Math.max(6, look.h - 2), Math.max(6, look.h - 2), look.trail);
-                        tr.node.setPosition(n.position);
-                        tr.node.setSiblingIndex(n.getSiblingIndex());
-                        fade(tr.node, 0.18);
-                        lastTrail = n.position.clone();
-                    }
-                },
-            })
-            .call(() => {
-                if (n.isValid) n.destroy();
+        Particles.shot(layer, {
+            from: a, to: b, ctrl, w: look.w, h: look.h, color: look.color,
+            trailColor: look.trail, trailSize: Math.max(6, look.h - 2), flight: FLIGHT, delay: delay + m * 0.04,
+            pointAlong: suit === 'S', spin: look.spin ? 18 : 0, angle: suit === 'D' ? 45 : 0,
+            onLand: () => {
                 if (suit === 'C' && layer.isValid) splat(layer, b);
                 if (++landed === look.motes) onLand();
-            })
-            .start();
+            },
+        });
     }
 }
 
 /** ♣ lands as a splat: a few green drops thrown outward. */
 function splat(layer: Node, at: Vec3) {
     for (let i = 0; i < 6; i++) {
-        const s = square(layer, 'Splat', 8, 8, i % 2 ? '#3C5956' : '#309C63');
-        s.node.setPosition(at);
         const ang = (Math.PI * 2 * i) / 6 + Math.random() * 0.5;
         const d = 24 + Math.random() * 16;
-        tween(s.node).to(0.22, { position: new Vec3(at.x + Math.cos(ang) * d, at.y + Math.sin(ang) * d, 0) }, { easing: 'quadOut' }).start();
-        fade(s.node, 0.2, 0.12);
+        Particles.dot(layer, {
+            x: at.x, y: at.y, w: 8, h: 8, color: i % 2 ? '#3C5956' : '#309C63',
+            tx: at.x + Math.cos(ang) * d, ty: at.y + Math.sin(ang) * d, move: 0.22, ease: EASE.quadOut, fade: 0.2, fadeDelay: 0.12,
+        });
     }
 }
 
@@ -109,21 +81,7 @@ export function popNumber(layer: Node, grid: Node, world: Vec3, text: string, co
     const count = st && clock < st.until ? st.count + 1 : 0;
     stacks.set(grid, { until: clock + 0.5, count });
     const p = toLocal(layer, world);
-    p.y += count * 44;
-    const holder = new Node('Number');
-    holder.layer = layer.layer;
-    layer.addChild(holder);
-    holder.addComponent(UITransform);
-    holder.setPosition(p);
-    const l: Label = makeLabel(holder, 'Text', text, { size: FONT.heading + 9, color, x: suit ? 14 : 0 });
-    l.enableShadow = true;
-    l.shadowColor = new Color(18, 14, 26, 255);
-    l.shadowOffset = new Vec2(3, -3);
-    if (suit) makeSprite(holder, 'Icon', UiKit.get().suitIcon(suit), 26, 26, { x: -22 - text.length * 9 });
-    holder.setScale(0.4, 0.4, 1);
-    tween(holder).to(0.12, { scale: new Vec3(1.15, 1.15, 1) }, { easing: 'backOut' }).to(0.08, { scale: new Vec3(1, 1, 1) })
-        .by(0.7, { position: new Vec3(0, 46, 0) }, { easing: 'quadOut' }).start();
-    fade(holder, 0.3, 0.6);
+    Particles.number(layer, { x: p.x, y: p.y + count * 44, text, color, icon: suit ? UiKit.get().suitIcon(suit) : null });
 }
 
 // ---- Game-layer rig: shake and zoom ---------------------------------------------------------
@@ -190,13 +148,12 @@ export function starBurst(layer: Node, world: Vec3, count = 16) {
     const at = toLocal(layer, world);
     for (let i = 0; i < count; i++) {
         const long = i % 2 === 0;
-        const s = square(layer, 'Star', long ? 40 : 22, 8, i % 4 === 0 ? '#ECECE0' : '#FDD164');
         const ang = (Math.PI * 2 * i) / count;
-        s.node.angle = ang * 180 / Math.PI;
-        s.node.setPosition(at);
         const d = (long ? 300 : 210) + Math.random() * 40;
-        tween(s.node).to(0.45, { position: new Vec3(at.x + Math.cos(ang) * d, at.y + Math.sin(ang) * d, 0) }, { easing: 'quadOut' }).start();
-        fade(s.node, 0.3, 0.3);
+        Particles.dot(layer, {
+            x: at.x, y: at.y, w: long ? 40 : 22, h: 8, color: i % 4 === 0 ? '#ECECE0' : '#FDD164', angle: ang * 180 / Math.PI,
+            tx: at.x + Math.cos(ang) * d, ty: at.y + Math.sin(ang) * d, move: 0.45, ease: EASE.quadOut, fade: 0.3, fadeDelay: 0.3,
+        });
     }
 }
 

@@ -13,7 +13,7 @@
 // not interactable = a quiet outline. Pressed = the card's darker step, no drop.
 
 import {
-    _decorator, Component, Sprite, SpriteFrame, Button, Label, Color, Enum, Node, EventTouch,
+    _decorator, Component, Sprite, Button, Label, Color, Enum, Node, EventTouch,
 } from 'cc';
 import { Sound } from '../app/Sound';
 import { EDITOR_NOT_IN_PREVIEW } from 'cc/env';
@@ -43,15 +43,6 @@ const SHADOW = 0;
 @executeInEditMode
 @requireComponent(Button)
 export class UiButton extends Component {
-    @property({ type: [SpriteFrame], tooltip: 'Normal frames in style order: Red, Cream, Blue, Dark.' })
-    normalFrames: SpriteFrame[] = [];
-
-    @property({ type: [SpriteFrame], tooltip: 'Pressed frames in style order: Red, Cream, Blue, Dark.' })
-    pressedFrames: SpriteFrame[] = [];
-
-    @property({ type: SpriteFrame, tooltip: 'Frame used when the button is not interactable.' })
-    disabledFrame: SpriteFrame | null = null;
-
     @property({ type: Label, tooltip: 'The child label. Found automatically if left empty.' })
     label: Label | null = null;
 

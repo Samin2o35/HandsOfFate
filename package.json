@@ -17,7 +17,9 @@
     "layout": "node tools/layout/run-all.mjs",
     "playlog": "tsx tools/playlog.ts",
     "sfx": "python3 tools/audio/make_sfx.py",
-    "music": "python3 tools/audio/make_music.py"
+    "music": "python3 tools/audio/make_music.py",
+    "perf": "node tools/layout/perf.mjs",
+    "atlas": "python3 tools/art/make_atlas_1x.py"
   },
   "devDependencies": {
     "@babel/core": "^7.29.13",

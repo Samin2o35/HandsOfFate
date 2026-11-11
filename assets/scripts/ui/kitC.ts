@@ -7,31 +7,99 @@
 // shown at exactly 2x with nearest filtering. Buttons are 9-sliced, so their
 // textures are made at screen size (2x baked in) with their borders set.
 
-import { Texture2D, ImageAsset, SpriteFrame, Node, Sprite, UITransform, Color } from 'cc';
+import { Texture2D, ImageAsset, SpriteFrame, Node, Sprite, UITransform, Color, Rect, Size, Vec2, director, Director } from 'cc';
 import * as px from './pixelart';
 import { makeNode, makeSprite, makeLabel, FONT, textWidth, Place } from './UiKit';
 
 const cache = new Map<string, SpriteFrame>();
 
+// ---- Shared atlas pages (Stage B, decision 142) --------------------------------------------------
+// Small pieces (cells, rings, medallions, buttons, flashes, rules, the white square) are packed
+// into shared 1024 x 1024 pages instead of one texture each, so sprites next to each other can
+// batch into one draw call. Big pieces (the brackets) keep their own texture. A page is
+// re-uploaded at most once a frame, just before drawing, when pieces were added to it.
+// Set ATLAS to false to go back to one texture per piece.
+export const ATLAS = true;
+const PAGE = 1024;
+const GAP = 2;
+const MAX_SIDE = PAGE - GAP * 2;
+const MAX_AREA = 160 * 160;
+
+interface Page { tex: Texture2D; data: Uint8Array; x: number; y: number; rowH: number; dirty: boolean; }
+const pages: Page[] = [];
+let flushQueued = false;
+
+function newPage(): Page {
+    const tex = new Texture2D();
+    tex.reset({ width: PAGE, height: PAGE, format: Texture2D.PixelFormat.RGBA8888 });
+    tex.setFilters(Texture2D.Filter.NEAREST, Texture2D.Filter.NEAREST);
+    tex.setWrapMode(Texture2D.WrapMode.CLAMP_TO_EDGE, Texture2D.WrapMode.CLAMP_TO_EDGE);
+    const page: Page = { tex, data: new Uint8Array(PAGE * PAGE * 4), x: GAP, y: GAP, rowH: 0, dirty: true };
+    pages.push(page);
+    return page;
+}
+
+/** Finds room for w x h on a page (shelf packing): the page and the top-left corner. */
+function place(w: number, h: number): { page: Page; x: number; y: number } {
+    for (const page of pages) {
+        if (page.x + w + GAP > PAGE) { page.y += page.rowH + GAP; page.x = GAP; page.rowH = 0; }
+        if (page.y + h + GAP <= PAGE) {
+            const at = { page, x: page.x, y: page.y };
+            page.x += w + GAP;
+            page.rowH = Math.max(page.rowH, h);
+            return at;
+        }
+    }
+    const page = newPage();
+    page.x = GAP + w + GAP;
+    page.rowH = h;
+    return { page, x: GAP, y: GAP };
+}
+
+function flushPages() {
+    flushQueued = false;
+    for (const page of pages) if (page.dirty) { page.dirty = false; page.tex.uploadData(page.data); }
+}
+
+/** Shared pages in use (for the perf tool and tests). */
+export function atlasPages(): number { return pages.length; }
+
 function toFrame(p: px.Pix, key: string, slice = 0): SpriteFrame {
     const hit = cache.get(key);
     if (hit) return hit;
-    const img = new ImageAsset({ _data: p.data, _compressed: false, width: p.w, height: p.h, format: Texture2D.PixelFormat.RGBA8888 } as never);
-    const tex = new Texture2D();
-    tex.image = img;
-    tex.setFilters(Texture2D.Filter.NEAREST, Texture2D.Filter.NEAREST);
-    tex.setWrapMode(Texture2D.WrapMode.CLAMP_TO_EDGE, Texture2D.WrapMode.CLAMP_TO_EDGE);
     const sf = new SpriteFrame();
-    sf.texture = tex;
+    if (ATLAS && p.w <= MAX_SIDE && p.h <= MAX_SIDE && p.w * p.h <= MAX_AREA) {
+        const { page, x, y } = place(p.w, p.h);
+        for (let row = 0; row < p.h; row++) {
+            page.data.set(p.data.subarray(row * p.w * 4, (row + 1) * p.w * 4), ((y + row) * PAGE + x) * 4);
+        }
+        page.dirty = true;
+        if (!flushQueued) { flushQueued = true; director.once(Director.EVENT_BEFORE_DRAW, flushPages); }
+        sf.reset({ texture: page.tex, rect: new Rect(x, y, p.w, p.h), originalSize: new Size(p.w, p.h), offset: new Vec2(0, 0), isRotate: false });
+    } else {
+        const img = new ImageAsset({ _data: p.data, _compressed: false, width: p.w, height: p.h, format: Texture2D.PixelFormat.RGBA8888 } as never);
+        const tex = new Texture2D();
+        tex.image = img;
+        tex.setFilters(Texture2D.Filter.NEAREST, Texture2D.Filter.NEAREST);
+        tex.setWrapMode(Texture2D.WrapMode.CLAMP_TO_EDGE, Texture2D.WrapMode.CLAMP_TO_EDGE);
+        sf.texture = tex;
+    }
     sf.packable = false;
     if (slice) { sf.insetLeft = slice; sf.insetRight = slice; sf.insetTop = slice; sf.insetBottom = slice; }
     sf.name = `kitC:${key}`;
+    // The layout tool paints pieces from their own pixels (a page holds many).
+    (sf as unknown as { _pix: px.Pix })._pix = p;
     cache.set(key, sf);
     return sf;
 }
 
 const art = (n: number) => Math.max(4, Math.round(n / 2));
 const even = (n: number) => Math.round(n / 2) * 2;
+
+/** A 2 x 2 white square, tinted in code (dims, covers, sparks). Replaces the old spark.png. */
+export function whiteFrame(): SpriteFrame {
+    return toFrame(new px.Pix(2, 2, [255, 255, 255, 255]), 'white');
+}
 
 // ---- Buttons (9-sliced) -----------------------------------------------------------------------
 

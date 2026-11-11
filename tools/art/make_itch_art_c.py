@@ -21,7 +21,7 @@ from PIL import Image
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import make_mockups_c as mc            # noqa: E402  Mock: frame, text, dotted, art
-import make_itch_art as old            # noqa: E402  card(strip, frame) at 1x
+import artbase as old                  # noqa: E402  card(strip, frame) at 1x
 
 OUT = os.path.join(os.getcwd(), 'build', 'itch_c')
 SMOKE = os.path.join(os.getcwd(), 'build', 'style', 'smoke_felt.png')

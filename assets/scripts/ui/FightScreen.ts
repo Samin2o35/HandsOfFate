@@ -236,8 +236,15 @@ export class FightScreen extends GameScreen {
         });
     }
 
+    private textKey = '';
+
     private refreshTexts() {
         const run = this.run!, f = this.fight!;
+        // Every frame calls this; the score and clock only change with whole seconds and fired hands.
+        const key = `${Math.floor(f.time)}|${f.player.stats.handsFired}|${f.player.stats.handPointsFired}|${f.player.living}|${f.enemy.stats.damageDealt > 0}`
+            + `|${this.shown?.player.cells.filter((c) => c.state === 'alive').length}|${this.shown?.enemy.cells.filter((c) => c.state === 'alive').length}`;
+        if (key === this.textKey) return;
+        this.textKey = key;
         const s = scoreRound({
             round: run.round, boss: run.isBoss, handsFired: f.player.stats.handsFired, handPoints: f.player.stats.handPointsFired,
             cellsLeft: f.player.living, cellsTotal: f.player.startLiving, flawless: f.enemy.stats.damageDealt === 0, time: f.time,
@@ -276,7 +283,7 @@ export class FightScreen extends GameScreen {
             const v = this.board?.viewFor(id);
             if (!v?.isValid) continue;
             const k = lift.get(id) ?? 0;
-            v.setSelected(k > 0);
+            v.setSelected(k > 0); // (active only changes when it differs)
             if ((this.popUntil.get(id) ?? 0) > this.clock) continue;
             const breathe = Math.sin(this.clock * 2.2 + id * 1.7) * 1.5;
             v.node.setPosition(base.x, base.y + k * LIFT + breathe, 0);

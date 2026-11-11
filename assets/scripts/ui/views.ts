@@ -5,7 +5,7 @@
 //   buildMiniBoard  an opponent's table, small
 // Hand badges and the hand list live in table.ts.
 
-import { _decorator, Component, Node, Sprite, UITransform } from 'cc';
+import { _decorator, Component, Node, Sprite } from 'cc';
 import { Card, Rank, rankLabel, SUIT_NAME } from '../core/cards';
 import { Grid } from '../core/grid';
 import { Hand } from '../core/evaluate';
@@ -103,13 +103,6 @@ export interface HealthGridParts {
     cellSize?: number;
 }
 
-/**
- * Draws a health grid that fits inside maxW × maxH, anchored at its top-left
- * corner (x, y). Cells are at most 36 px apart by default (maxPitch), with a 20% gap.
- */
-/** Their health grid has room for bigger cells (opponent panel). */
-export const THEIR_PITCH = 52;
-
 export function buildHealthGrid(parent: Node, health: HealthGrid | number, maxW: number, maxH: number, x: number, y: number, maxPitch = 36, gapRatio = 0.2): HealthGridParts {
     const count = typeof health === 'number' ? health : health.cells.length;
     const cols = typeof health === 'number' ? healthCols(count) : health.cols;
@@ -168,12 +161,6 @@ export function buildMiniBoard(parent: Node, g: Grid, maxW: number, maxH: number
         }
     }
     return { node, width, height };
-}
-
-/** Width/height helper for a node built by these functions. */
-export function sizeOf(n: Node): { w: number; h: number } {
-    const ut = n.getComponent(UITransform)!;
-    return { w: ut.width, h: ut.height };
 }
 
 /**

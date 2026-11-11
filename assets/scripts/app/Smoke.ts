@@ -10,7 +10,8 @@
 
 import { _decorator, Component, UITransform, Sprite, Material, EffectAsset, resources, Vec3, Vec4, Color, view } from 'cc';
 import { Suit, SUIT_COLOR_HEX } from '../core/cards';
-import { UiKit, makeNode } from '../ui/UiKit';
+import { makeNode } from '../ui/UiKit';
+import { whiteFrame } from '../ui/kitC';
 import { Game } from './Game';
 
 const { ccclass } = _decorator;
@@ -84,9 +85,15 @@ export class Smoke extends Component {
 
     // ---- Lifecycle ---------------------------------------------------------------------------
 
+    /** Resolves once the smoke is on screen (or has failed to load), so the first screen can wait for it. */
+    static ready: Promise<void> = Promise.resolve();
+    private resolveReady: (() => void) | null = null;
+
     onLoad() {
         Smoke.instance = this;
-        UiKit.ready.then(() => this.create());
+        Smoke.ready = new Promise<void>((r) => { this.resolveReady = r; });
+        // Its sprite is the runtime white square (kitC), so it needn't wait for UiKit's card art.
+        this.create();
     }
 
     onDestroy() {
@@ -98,6 +105,7 @@ export class Smoke extends Component {
             if (err || !effect || !this.node.isValid) {
                 this.failed = true;
                 console.warn('[Smoke] effects/smoke could not load; no smoke background.', err);
+                this.resolveReady?.();
                 return;
             }
             const mat = new Material();
@@ -106,13 +114,14 @@ export class Smoke extends Component {
             const n = makeNode(this.node, 'Smoke', 10, 10);
             n.setSiblingIndex(0);
             const sp = n.addComponent(Sprite);
-            sp.spriteFrame = UiKit.get().spark;
+            sp.spriteFrame = whiteFrame();
             sp.sizeMode = Sprite.SizeMode.CUSTOM;
             sp.customMaterial = mat;
             this.sprite = sp;
             this.material = mat;
             Smoke.applyMotion();
             this.fit();
+            this.resolveReady?.();
         });
     }
 

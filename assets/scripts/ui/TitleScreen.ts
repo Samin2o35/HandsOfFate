@@ -19,7 +19,7 @@ import { UiButton, ButtonStyle } from './UiButton';
 import { Game } from '../app/Game';
 import { ScreenManager } from '../app/ScreenManager';
 import { confirmBox } from './Modal';
-import { UiKit, makeLabel, FONT } from './UiKit';
+import { makeLabel, FONT } from './UiKit';
 import { frame, rule, INK_TEXT } from './kitC';
 import { AnimatedCard } from './AnimatedCard';
 
@@ -58,7 +58,9 @@ export class TitleScreen extends GameScreen {
             if (b) b.style = ButtonStyle.Dark;
         }
         if (this.quitButton) this.quitButton.node.active = sys.isNative && sys.os === sys.OS.ANDROID;
-        if (!EDITOR_NOT_IN_PREVIEW) UiKit.ready.then(() => { if (this.node.isValid) this.dress(); });
+        // Dressed at once: nothing in it waits for UiKit's card art (the fan's cards load their
+        // own strips), so the prefab's old look never shows (decision 141).
+        if (!EDITOR_NOT_IN_PREVIEW) this.dress();
         this.refresh();
     }
 

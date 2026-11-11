@@ -16,6 +16,8 @@ import { GameScreen } from '../ui/GameScreen';
 import { Game } from './Game';
 import { Sound } from './Sound';
 import { Smoke } from './Smoke';
+import { UiKit } from '../ui/UiKit';
+import { Particles } from '../ui/particles';
 import { Run } from '../core/run';
 import { Suit } from '../core/cards';
 import { registerPreview } from './Preview';
@@ -23,6 +25,8 @@ const { ccclass, property } = _decorator;
 
 /** Frames to wait after onShow before fading in: covers UiKit.ready, the screens' scheduleOnce(0) build, and the long frame it makes. */
 const BUILD_FRAMES = 3;
+/** Longest the first screen waits for the card art and the smoke (seconds). */
+const FIRST_WAIT = 4;
 
 @ccclass('ScreenManager')
 export class ScreenManager extends Component {
@@ -54,11 +58,19 @@ export class ScreenManager extends Component {
         Game.load();
         if (!this.getComponent(Sound)) this.addComponent(Sound);
         if (!this.getComponent(Smoke)) this.addComponent(Smoke);
+        if (!this.getComponent(Particles)) this.addComponent(Particles);
         registerPreview((name, params) => ScreenManager.show(name, params));
     }
 
     start() {
-        if (this.firstScreen) ScreenManager.show(this.firstScreen);
+        // The first screen waits (on the room colour) until the card art and the smoke are
+        // ready, so it never shows half-dressed and then changes (Stage B, decision 141).
+        // At most FIRST_WAIT seconds, in case something never loads.
+        if (!this.firstScreen) return;
+        let shown = false;
+        const go = () => { if (shown || !this.node.isValid) return; shown = true; ScreenManager.show(this.firstScreen); };
+        Promise.all([UiKit.ready.catch(() => undefined), Smoke.ready]).then(go, go);
+        this.scheduleOnce(go, FIRST_WAIT);
     }
 
     onDestroy() {
