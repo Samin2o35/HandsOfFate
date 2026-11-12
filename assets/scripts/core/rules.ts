@@ -19,6 +19,8 @@ export interface RuleSet {
     /** Blight (King of Clubs): seconds between spreads at tier 1, and the fastest it gets. */
     blightStart: number;
     blightFloor: number;
+    /** Seconds between a high card's shots (a lone card in no hand). Stage D, decision 157. */
+    highCardCooldown: number;
 }
 
 export const DEFAULT_RULES: Readonly<RuleSet> = {
@@ -30,6 +32,7 @@ export const DEFAULT_RULES: Readonly<RuleSet> = {
     executionPeriod: 8,
     blightStart: 12,
     blightFloor: 6,
+    highCardCooldown: 5.0,
 };
 
 /** Rule sets to compare in the sim (and to switch to once one is chosen). */
@@ -47,6 +50,10 @@ export const VARIANTS: Record<string, Partial<RuleSet>> = {
     flush4FairKings: { minFlush: 4, minStraightFlush: 4, strictDecks: true, executionPeriod: 10, blightStart: 14, blightFloor: 8 },
     /** Both together. */
     flush4SoftKings: { minFlush: 4, minStraightFlush: 4, strictDecks: true, bossBudgetMult: 1.15, bossExtraHealth: 6 },
+    /** High cards fire every 4.0 s (like a pair) instead of 5.0 s. */
+    highCard4: { highCardCooldown: 4.0 },
+    /** High cards fire every 3.5 s. */
+    highCard35: { highCardCooldown: 3.5 },
 };
 
 /** The rules in force. Read at call time by the rules code. */

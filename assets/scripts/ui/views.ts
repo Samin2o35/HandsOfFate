@@ -5,12 +5,13 @@
 //   buildMiniBoard  an opponent's table, small
 // Hand badges and the hand list live in table.ts.
 
-import { _decorator, Component, Node, Sprite } from 'cc';
+import { _decorator, Component, Node, Sprite, UITransform } from 'cc';
 import { Card, Rank, rankLabel, SUIT_NAME } from '../core/cards';
 import { Grid } from '../core/grid';
 import { Hand } from '../core/evaluate';
 import { HandCategory } from '../core/hands';
 import { HealthGrid, healthCols } from '../core/health';
+import { Trace } from './trace';
 import { UiKit, makeNode, makeSprite } from './UiKit';
 import { ringFrame, cellFrame, cellSpriteSize } from './kitC';
 
@@ -56,6 +57,15 @@ export class CardView extends Component {
 
     setInHand(on: boolean) { if (this.gold) this.gold.active = on; }
     setSelected(on: boolean) { if (this.pink) this.pink.active = on; }
+
+    /** The charging outline round the card (fights, decision 156): made on first use, just outside the card. */
+    trace: Trace | null = null;
+    addTrace(): Trace {
+        if (this.trace) return this.trace;
+        const ut = this.node.getComponent(UITransform)!;
+        this.trace = new Trace(this.node, 'Trace', even(ut.width + 12), even(ut.height + 12));
+        return this.trace;
+    }
 }
 
 /** An empty card slot: a dotted cream outline, clear on the smoke (Stage C, decision 152). A card covers it. */

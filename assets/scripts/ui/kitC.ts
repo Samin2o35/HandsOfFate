@@ -201,6 +201,31 @@ export function medallionFrame(lit: number, suit = true): SpriteFrame {
     return toFrame(px.medallion(l, suit), `med:${suit ? l : 'none'}`);
 }
 
+/** Palette colours by hex, for frames tinted per suit or effect. */
+function palOf(hexColor: string): px.RGBA {
+    const h = hexColor.replace('#', '').toLowerCase();
+    return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16), 255];
+}
+
+/** The medallion's charging ring (72 x 72 on screen), `progress` 0..1 from the bottom, in `hexColor` (decision 154). */
+export function traceRingFrame(progress: number, hexColor: string, suit = true): SpriteFrame {
+    const step = Math.max(0, Math.min(px.TRACE_STEPS, Math.round(progress * px.TRACE_STEPS)));
+    const key = `tring:${suit ? step : 'none'}:${hexColor}`;
+    const hit = cache.get(key);
+    if (hit) return hit;
+    return toFrame(px.traceRing(step / px.TRACE_STEPS, palOf(hexColor), suit), key);
+}
+
+/**
+ * A hollow 2 px ink rectangle as one 9-sliced frame (the charging outline's track, ui/trace.ts):
+ * Drawn 1:1 at 6 x 6 px with a 2 px border, sliced 2 px on every side.
+ */
+export function inkOutlineFrame(): SpriteFrame {
+    const p = new px.Pix(6, 6);
+    for (let y = 0; y < 6; y++) for (let x = 0; x < 6; x++) if (x < 2 || y < 2 || x > 3 || y > 3) p.set(x, y, px.PAL.ink);
+    return toFrame(p, 'inkOutline', 2);
+}
+
 /** Text colours of the open table. */
 export const INK_TEXT = {
     main: '#ECECE0',

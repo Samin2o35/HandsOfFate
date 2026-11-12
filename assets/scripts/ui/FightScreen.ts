@@ -28,6 +28,7 @@ import { HealthGrid, cloneHealthGrid } from '../core/health';
 import { applyEffect } from '../core/patterns';
 import { Hand, evaluateBoard } from '../core/evaluate';
 import { showTheirTable } from './TheirTable';
+import { Trace } from './trace';
 import { EFFECT_CHARGES } from '../core/hands';
 import { scoreRound, formatTime } from '../core/scoring';
 import { UiKit, makeNode, makeSprite, makeLabel, makeButton, clearChildren, FONT } from './UiKit';
@@ -48,7 +49,7 @@ import { tutorialStep, setTutorialStep, showTutorial } from './Tutorial';
 import { jokerLine, jokerSay } from './joker';
 import {
     tableRegions, buildStrip, buildHandList, paintEntry, buildOpponentPanel, paintBadge, lightBadge, setCount, buildHealthBlock, buildJoker, HealthBlock,
-    BadgeParts, ListEntry, GREY,
+    BadgeParts, ListEntry, GREY, EFFECT_COLOR,
 } from './table';
 const { ccclass } = _decorator;
 
@@ -82,6 +83,7 @@ export class FightScreen extends GameScreen {
     private badgeFor = new Map<string, BadgeParts>();
     private entryFor = new Map<string, ListEntry>();
     private theirLine = new Map<string, Node>();
+    private theirTrace = new Map<string, Trace>();
     private mine: HealthBlock | null = null;
     private theirs: HealthBlock | null = null;
     /** Hand ids lit until this game-time-independent clock (seconds of real time). */
@@ -165,7 +167,7 @@ export class FightScreen extends GameScreen {
         const healthH = Math.max(168, Math.ceil(cells / healthCols(cells)) * 34 + 66);
         const listTop = side.top + 4;
         const stashTop = side.top - side.height + STASH_H;
-        const list = buildHandList(root, run.board().hands, side.left, listTop, side.width, listTop - (stashTop + 4) - 22 - healthH - 22);
+        const list = buildHandList(root, run.board().hands, side.left, listTop, side.width, listTop - (stashTop + 4) - 22 - healthH - 22, { traces: true });
         this.entryFor.clear();
         for (const e of list.entries) this.entryFor.set(e.hand.id, e);
         this.mine = buildHealthBlock(root, side.left, list.bottom - 22, side.width, this.view!.player);
@@ -181,7 +183,12 @@ export class FightScreen extends GameScreen {
         this.cardBase.clear();
         for (const h of f.player.hands) for (const pc of h.hand.cards) {
             const v = this.board.viewFor(pc.card.id);
-            if (v) this.cardBase.set(pc.card.id, v.node.position.clone());
+            if (!v) continue;
+            this.cardBase.set(pc.card.id, v.node.position.clone());
+            // In the fight a card's border traces its next shot in that hand's effect colour,
+            // instead of the gold ring; lone high cards get one too (decision 156).
+            v.setInHand(false);
+            v.addTrace();
         }
         this.rig = new Rig(root);
         buildJoker(root, g, this.board.block.left + this.board.block.width / 2, this.board.frameTop);
@@ -195,8 +202,9 @@ export class FightScreen extends GameScreen {
             this.paused = true;
             showTheirTable(this.node, run, run.opponent, evaluateBoard(run.opponent.grid), cooldownOf, () => { this.paused = false; });
         };
-        const panel = buildOpponentPanel(root, g.opponent, run.opponent, f.enemy.hands.map((h) => h.hand), cooldownOf, this.view!.enemy, viewTable);
+        const panel = buildOpponentPanel(root, g.opponent, run.opponent, f.enemy.hands.map((h) => h.hand), cooldownOf, this.view!.enemy, viewTable, true);
         this.theirLine = panel.lines;
+        this.theirTrace = panel.traces;
         this.avatar = panel.avatar;
         this.theirs = panel.health;
         this.grids.enemy = panel.health.grid;
@@ -230,8 +238,13 @@ export class FightScreen extends GameScreen {
             const entry = this.entryFor.get(h.hand.id);
             if (entry) {
                 this.paintPips(entry, h);
+                entry.trace?.set(spent ? 0 : f.progress(h), EFFECT_COLOR[h.hand.effect]);
                 if (spent) (entry.node.getComponent(UIOpacity) ?? entry.node.addComponent(UIOpacity)).opacity = 110;
             }
+        }
+        // Their lines trace their cooldowns the same way.
+        for (const h of f.enemy.hands) {
+            this.theirTrace.get(h.hand.id)?.set(h.charges <= 0 ? 0 : f.progress(h), EFFECT_COLOR[h.hand.effect]);
         }
     }
 
@@ -281,18 +294,26 @@ export class FightScreen extends GameScreen {
     private refreshCharge() {
         const f = this.fight!;
         const lift = new Map<number, number>();
+        // Each card traces the hand it fires in next (the least time left), in its effect colour.
+        const next = new Map<number, { left: number; progress: number; color: string }>();
         for (const h of f.player.hands) {
             if (h.charges <= 0) continue;
-            const left = (1 - f.progress(h)) * h.cooldown;
+            const progress = f.progress(h);
+            const left = (1 - progress) * h.cooldown;
             const lit = this.litUntil.has(`player:${h.hand.id}`);
             const k = lit ? 1 : left < CHARGE ? 1 - left / CHARGE : 0;
-            for (const pc of h.hand.cards) lift.set(pc.card.id, Math.max(lift.get(pc.card.id) ?? 0, k));
+            for (const pc of h.hand.cards) {
+                lift.set(pc.card.id, Math.max(lift.get(pc.card.id) ?? 0, k));
+                const was = next.get(pc.card.id);
+                if (!was || left < was.left) next.set(pc.card.id, { left, progress: lit ? 1 : progress, color: EFFECT_COLOR[h.hand.effect] });
+            }
         }
         for (const [id, base] of this.cardBase) {
             const v = this.board?.viewFor(id);
             if (!v?.isValid) continue;
             const k = lift.get(id) ?? 0;
-            v.setSelected(k > 0); // (active only changes when it differs)
+            const n = next.get(id);
+            v.trace?.set(n ? n.progress : 0, n ? n.color : '#3B324A');
             if ((this.popUntil.get(id) ?? 0) > this.clock) continue;
             const breathe = Math.sin(this.clock * 2.2 + id * 1.7) * 1.5;
             v.node.setPosition(base.x, base.y + k * LIFT + breathe, 0);

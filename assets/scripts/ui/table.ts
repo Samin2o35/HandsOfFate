@@ -15,7 +15,7 @@
 
 import { Node, UITransform, Sprite, Label, Mask, Color } from 'cc';
 import { Hand } from '../core/evaluate';
-import { HAND_INFO, EFFECT_NAME, EFFECT_CHARGES } from '../core/hands';
+import { HAND_INFO, EFFECT_NAME, EFFECT_CHARGES, Effect } from '../core/hands';
 import { Opponent } from '../core/opponents';
 import { SUIT_COLOR_HEX, Suit, DEALER_CARD_PATH } from '../core/cards';
 import { HealthGrid, healthCols } from '../core/health';
@@ -23,7 +23,8 @@ import { BOSSES, twistText, tierNumeral } from '../core/bosses';
 import { UiKit, makeNode, makeSprite, makeLabel, makeButton, textWidth } from './UiKit';
 import { ButtonStyle } from './UiButton';
 import { buildAvatar, cooldownText, buildHealthGrid, HealthGridParts } from './views';
-import { frame, rule, ringFrame, medallionFrame, INK_TEXT } from './kitC';
+import { frame, rule, ringFrame, traceRingFrame, INK_TEXT } from './kitC';
+import { Trace } from './trace';
 
 /** Text colours of the open table (kept under the old name for the screens that use it). */
 export const GREY = {
@@ -164,26 +165,29 @@ export interface BadgeParts {
 }
 
 /**
- * The same badge at the end of every row and under every column: the face cards'
- * round medallion, the hand's suit in the middle and 12 dots around it as the
- * timer (all lit while planning; the fight fills them). A full line with no hand
- * shows a dash; a line that isn't full shows the dots only.
+ * The same badge at the end of every row and under every column: the hand's suit pip
+ * inside a ring in the suit colour, which traces round from the bottom as the hand
+ * charges (full while planning). A full line with no hand shows a dash; a line that
+ * isn't full shows the empty ink ring (Stage D, decision 155).
  */
 export function buildBadge(parent: Node, name: string, hand: Hand | null, full: boolean, x: number, y: number): BadgeParts {
     const kit = UiKit.get();
     const node = makeNode(parent, name, BADGE, BADGE, { x, y });
-    const back = makeSprite(node, 'Medallion', medallionFrame(hand ? 12 : 0, !!hand || !full), 72, 72);
+    const back = makeSprite(node, 'Medallion', traceRingFrame(hand ? 1 : 0, hand ? SUIT_COLOR_HEX[hand.suit] : '#ECECE0', !!hand || !full), 72, 72);
     const pip = hand ? makeSprite(node, 'Icon', kit.suitIcon(hand.suit), 36, 36) : null;
     return { node, back, pip, hand };
 }
 
-/** The timer: `progress` 0..1 of the way to firing; a spent hand goes dark. */
+/** The timer: `progress` 0..1 of the way to firing; a spent hand's ring and pip go dark. */
 export function paintBadge(b: BadgeParts, progress: number, spent = false) {
     if (!b.hand || !b.back.isValid) return;
-    const f = medallionFrame(spent ? 0 : progress * 12);
+    const f = traceRingFrame(spent ? 0 : progress, SUIT_COLOR_HEX[b.hand.suit]);
     if (b.back.spriteFrame !== f) b.back.spriteFrame = f;
     if (b.pip && b.shownSpent !== spent) { b.shownSpent = spent; b.pip.color = new Color().fromHEX(spent ? GREY.dim : '#FFFFFF'); }
 }
+
+/** Each effect's colour, for charging outlines round lines and cards (decision 156). */
+export const EFFECT_COLOR: Record<Effect, string> = { attack: '#8E478C', rot: '#309C63', heal: '#D47564', armor: '#94D2D4' };
 
 /** A firing hand's medallion lights gold. */
 export function lightBadge(b: BadgeParts, on: boolean) {
@@ -198,6 +202,8 @@ export interface ListEntry {
     /** The dotted ring round the line: gold while it fires, pink when picked. */
     back: Sprite;
     pips: Node[];
+    /** The charging outline round the line (only when the list was built with traces: the fight). */
+    trace: Trace | null;
 }
 
 /** "R2" / "C3" */
@@ -210,6 +216,8 @@ export interface HandListOptions {
     caption?: string;
     cooldownOf?: (h: Hand) => number;
     onTap?: (hand: Hand) => void;
+    /** Give each line a charging outline (the fight). */
+    traces?: boolean;
 }
 
 /** Below this row pitch, one column would get cramped, so the list goes to two. */
@@ -247,13 +255,14 @@ export function buildHandList(root: Node, hands: readonly Hand[], left: number, 
         const rowTop = top - 34 - k * pitch;
         const cx = left + col * (cw + colGap) + cw / 2;
         const n = makeNode(root, `Hand ${hand.id}`, cw, rowH, { x: cx, y: rowTop - rowH / 2 });
+        const trace = o.traces ? new Trace(n, 'Trace', cw + 8, rowH - 2) : null;
         const back = makeSprite(n, 'Ring', ringFrame(cw + 8, rowH - 2, 'gold'), cw + 8, rowH - 2);
         back.node.active = false;
         const pips = two ? compactEntry(n, hand, cw, rowH, cooldownOf(hand)) : wideEntry(n, hand, cw, rowH, cooldownOf(hand));
         // A dotted rule under each line, except the last of a column with nothing below it.
         if (k < perCol - 1 || extra) rule(root, `Rule ${i}`, cw - 12, cx - cw / 2 + 6, rowTop - pitch + 4);
         if (o.onTap) { const tap = o.onTap; n.on(Node.EventType.TOUCH_END, () => tap(hand)); }
-        entries.push({ hand, node: n, back, pips });
+        entries.push({ hand, node: n, back, pips, trace });
     });
     const tailY = top - 34 - perCol * pitch - 17;
     if (lines.length === 0) {
@@ -349,6 +358,8 @@ export interface OpponentPanelParts {
     health: HealthBlock;
     /** Their hand lines by hand id: a gold ring, shown while that hand fires. */
     lines: Map<string, Node>;
+    /** Their hand lines' charging outlines by hand id (fights only, decision 156). */
+    traces: Map<string, Trace>;
     /** The portrait (boss twists fly from it). */
     avatar: Node;
 }
@@ -359,7 +370,7 @@ export interface OpponentPanelParts {
  * cards are what you take after the round.
  */
 export function buildOpponentPanel(root: Node, r: Region, o: Opponent, hands: readonly Hand[], cooldownOf: (h: Hand) => number,
-    health: HealthGrid, onView?: () => void): OpponentPanelParts {
+    health: HealthGrid, onView?: () => void, withTraces = false): OpponentPanelParts {
     const kit = UiKit.get();
     const panel = makeNode(root, 'Opponent', r.width, r.height, { x: r.left + r.width / 2, y: r.top - r.height / 2 });
     frame(panel, 'Frame', r.width, r.height, {}, { caption: o.boss ? 'HIS SIDE OF THE TABLE' : 'ACROSS THE TABLE' });
@@ -379,6 +390,7 @@ export function buildOpponentPanel(root: Node, r: Region, o: Opponent, hands: re
 
     // Their hands, as many as fit above their health.
     const lines = new Map<string, Node>();
+    const traces = new Map<string, Trace>();
     const listed = hands.filter((h) => h.source !== 'leftover');
     const gridRows = Math.ceil(total / healthCols(total));
     // Keep room for a few of their hands first (up to 3, plus a "+n more" line), then size the grid to what's left.
@@ -394,7 +406,9 @@ export function buildOpponentPanel(root: Node, r: Region, o: Opponent, hands: re
     if (onView) makeButton(panel, 'ViewTable', ButtonStyle.Dark, o.boss ? 'View his table' : 'View their table', 270, 50, { x: r.width / 2 - 30 - 135, y: top - 262 }, onView, 24);
     shown.forEach((h, i) => {
         const y = top - 311 - i * 50;
-        const ring = makeSprite(panel, `Their ${h.id}`, ringFrame(r.width - 44, 46, 'gold'), Math.round((r.width - 44) / 2) * 2, 46, { y }).node;
+        const lw = Math.round((r.width - 44) / 2) * 2;
+        if (withTraces) traces.set(h.id, new Trace(panel, `Trace ${h.id}`, lw, 46, 0, y));
+        const ring = makeSprite(panel, `Their ${h.id}`, ringFrame(r.width - 44, 46, 'gold'), lw, 46, { y }).node;
         ring.active = false;
         lines.set(h.id, ring);
         makeSprite(panel, `Icon ${h.id}`, kit.suitIcon(h.suit), 36, 36, { x: x0 + 18, y });
@@ -418,7 +432,7 @@ export function buildOpponentPanel(root: Node, r: Region, o: Opponent, hands: re
     const grid = buildHealthGrid(panel, health, r.width - 300, gridH, x0, hTop - 27, pitch, 0.19);
     const alive = health.cells.filter((c) => c.state === 'alive').length;
     const [count, tot] = countLabels(panel, r.width / 2 - 90, hTop - 91, 88, alive, total);
-    return { node: panel, health: { grid, count, total: tot, bottom: hTop - 27 - grid.height }, lines, avatar };
+    return { node: panel, health: { grid, count, total: tot, bottom: hTop - 27 - grid.height }, lines, traces, avatar };
 }
 
 /** Updates a "12 / 12" count from a grid. */

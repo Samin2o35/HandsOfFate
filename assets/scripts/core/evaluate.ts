@@ -228,7 +228,7 @@ function makeHand(
         kickers,
         suit,
         effect: EFFECT_OF_SUIT[suit],
-        cooldown: info.cooldown,
+        cooldown: category === 'high' ? RULES.highCardCooldown : info.cooldown,
         points: info.points,
         pattern: info.pattern,
         multiplier: info.multiplier,

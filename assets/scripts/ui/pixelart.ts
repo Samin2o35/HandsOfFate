@@ -296,3 +296,29 @@ export function flashOutline(n: number): Pix {
     }
     return p;
 }
+
+// ---- Charging traces (Stage D, decision 154) -----------------------------------------------------
+// As a hand charges, a line in its colour lights from the bottom centre up both sides and
+// meets at the top, over a dark ink track (like the card borders in the reference
+// targetRef.gif). The same idea for the medallion ring, the hand lines and the cards.
+
+/** Steps a trace is drawn in (frames are cached per step). */
+export const TRACE_STEPS = 24;
+
+/**
+ * The medallion ring (36 x 36): a 2 px circle, lit `lit` (0..1) of the way round from the
+ * bottom, both ways at once, in `col`; the rest ink. suit = false adds the empty-line dash.
+ */
+export function traceRing(lit: number, col: RGBA, suit = true, track: RGBA = PAL.ink): Pix {
+    const s = 36, c = (s - 1) / 2;
+    const p = new Pix(s, s);
+    for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) {
+        const dx = x - c, dy = y - c, r = Math.hypot(dx, dy);
+        if (r < 15.2 || r > 17.4) continue;
+        // 0 at the bottom, 1 at the top, the same on both sides.
+        const along = Math.abs(Math.atan2(dx, dy)) / Math.PI;
+        p.set(x, y, suit && lit > 0 && along <= lit + 1e-9 ? col : track);
+    }
+    if (!suit) for (let x = 14; x < 22; x++) { p.set(x, 17, PAL.cream); p.set(x, 18, PAL.cream); }
+    return p;
+}

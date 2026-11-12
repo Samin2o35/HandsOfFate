@@ -49,4 +49,16 @@ describe('rule knobs', () => {
     it('every variant names only real knobs', () => {
         for (const v of Object.values(VARIANTS)) for (const k of Object.keys(v)) expect(k in DEFAULT_RULES).toBe(true);
     });
+    it('high cards use the highCardCooldown knob (default 5.0 s, decision 157)', async () => {
+        const { evaluateBoard } = await import('../assets/scripts/core/evaluate');
+        const { Run } = await import('../assets/scripts/core/run');
+        const run = Run.newRun({ seed: 51, tutorial: true } as any);
+        const highs = () => evaluateBoard(run.grid).hands.filter((h) => h.category === 'high');
+        expect(highs().length).toBeGreaterThan(0);
+        expect(highs().every((h) => h.cooldown === 5.0)).toBe(true);
+        useRules('highCard35');
+        expect(highs().every((h) => h.cooldown === 3.5)).toBe(true);
+        useRules('current');
+        expect(RULES.highCardCooldown).toBe(5.0);
+    });
 });
