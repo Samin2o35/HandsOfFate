@@ -216,19 +216,6 @@ export function dottedRule(w: number, col: RGBA): Pix {
     return p;
 }
 
-/** A dotted oval (the boss's glow): n 2x2 dots spaced evenly round an ellipse filling w x h. */
-export function dottedOval(w: number, h: number, col: RGBA, n = 56): Pix {
-    const p = new Pix(w, h);
-    const rx = (w - 2) / 2, ry = (h - 2) / 2;
-    for (let i = 0; i < n; i++) {
-        const a = (i * 2 * Math.PI) / n;
-        const x = Math.round(rx + Math.cos(a) * rx), y = Math.round(ry + Math.sin(a) * ry);
-        for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) p.set(x + dx, y + dy, col);
-    }
-    return p;
-}
-
-/** A flat bar: `fill` art pixels of colour from the left, the rest clear (progress inside a rail). */
 export function bar(w: number, h: number, fill: number, col: RGBA): Pix {
     const p = new Pix(w, h);
     for (let y = 0; y < h; y++) for (let x = 0; x < Math.min(w, fill); x++) p.set(x, y, col);
@@ -320,5 +307,134 @@ export function traceRing(lit: number, col: RGBA, suit = true, track: RGBA = PAL
         p.set(x, y, suit && lit > 0 && along <= lit + 1e-9 ? col : track);
     }
     if (!suit) for (let x = 14; x < 22; x++) { p.set(x, 17, PAL.cream); p.set(x, 18, PAL.cream); }
+    return p;
+}
+
+// ---- Impact pieces (Stage E, decision 158) -------------------------------------------------------
+// White one-colour shapes, tinted to a palette colour in code, so each piece is exact palette.
+// A few seeded variants each; the FX GIFs were looked at for ideas only (radial splats with
+// thrown droplets; a bright head with a tapering dotted trail), nothing is copied.
+
+const W1: RGBA = [255, 255, 255, 255];
+
+/** A tiny repeatable random (mulberry32). */
+export function seeded(seed: number): () => number {
+    let a = seed >>> 0;
+    return () => {
+        a = (a + 0x6d2b79f5) >>> 0;
+        let t = a;
+        t = Math.imul(t ^ (t >>> 15), t | 1);
+        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+}
+
+export type FxKind = 'splat' | 'drop' | 'plus' | 'sparkle' | 'shard' | 'bubble' | 'ring' | 'blob';
+export const FX_VARIANTS: Record<FxKind, number> = { splat: 4, drop: 2, plus: 2, sparkle: 2, shard: 4, bubble: 2, ring: 1, blob: 3 };
+
+/** A splat: a lumpy core with spikes and a few thrown droplets (s x s, s = 17). */
+function splat(v: number): Pix {
+    const s = 17, c = 8, rnd = seeded(101 + v * 7);
+    const p = new Pix(s, s);
+    // Lumpy core: radius varies with angle.
+    const lumps = [0, 0, 0, 0, 0, 0, 0, 0].map(() => 3 + rnd() * 1.8);
+    for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) {
+        const dx = x - c, dy = y - c, a = (Math.atan2(dy, dx) + Math.PI) / (Math.PI * 2) * 8;
+        const i = Math.floor(a) % 8, f = a - Math.floor(a);
+        const r = lumps[i] * (1 - f) + lumps[(i + 1) % 8] * f;
+        if (Math.hypot(dx, dy) <= r) p.set(x, y, W1);
+    }
+    // Spikes, then a droplet at the end of some.
+    const n = 4 + Math.floor(rnd() * 3);
+    for (let k = 0; k < n; k++) {
+        const a = (k / n) * Math.PI * 2 + rnd() * 0.6, len = 5 + rnd() * 3;
+        for (let t = 3; t < len; t += 0.5) {
+            const x = Math.round(c + Math.cos(a) * t), y = Math.round(c + Math.sin(a) * t);
+            p.set(x, y, W1);
+            // Thick at the root, thin at the tip.
+            if (t < len * 0.6) p.set(Math.round(x - Math.sin(a)), Math.round(y + Math.cos(a)), W1);
+        }
+        if (rnd() < 0.6) {
+            const d = len + 1.5;
+            const dx = Math.round(c + Math.cos(a) * d), dy = Math.round(c + Math.sin(a) * d);
+            p.set(dx, dy, W1); if (rnd() < 0.5) p.set(dx + 1, dy, W1);
+        }
+    }
+    return p;
+}
+
+/** A falling drop: round bottom, pointed top (3 x 5 or 4 x 6). */
+function drop(v: number): Pix {
+    const rows = v === 0 ? ['.#.', '.#.', '###', '###', '.#.'] : ['.##.', '.##.', '####', '####', '####', '.##.'];
+    return fromRows(rows);
+}
+
+function fromRows(rows: string[]): Pix {
+    const p = new Pix(rows[0].length, rows.length);
+    // Rows are written top-down; Pix rows are drawn top-down too.
+    rows.forEach((r, y) => { for (let x = 0; x < r.length; x++) if (r[x] === '#') p.set(x, y, W1); });
+    return p;
+}
+
+const FX_ROWS: Partial<Record<FxKind, string[][]>> = {
+    plus: [
+        ['..#..', '..#..', '#####', '..#..', '..#..'],
+        ['.#.', '###', '.#.'],
+    ],
+    sparkle: [
+        ['...#...', '...#...', '..###..', '#######', '..###..', '...#...', '...#...'],
+        ['..#..', '.###.', '#####', '.###.', '..#..'],
+    ],
+    shard: [
+        ['#..', '##.', '###', '.##', '..#'],
+        ['##', '##', '#.', '#.'],
+        ['.#', '##', '##', '#.'],
+        ['###.', '.###'],
+    ],
+    bubble: [
+        ['.##.', '#..#', '#..#', '.##.'],
+        ['..##..', '.#..#.', '#....#', '#....#', '.#..#.', '..##..'],
+    ],
+};
+
+/** A hollow ring (13 x 13), the shield flash. */
+function ring(): Pix {
+    const s = 13, c = 6, p = new Pix(s, s);
+    for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) {
+        const r = Math.hypot(x - c, y - c);
+        if (r >= 4.6 && r <= 6.2) p.set(x, y, W1);
+    }
+    return p;
+}
+
+/** A soft lumpy blob (ooze), 9 x 7. */
+function blob(v: number): Pix {
+    const rnd = seeded(303 + v * 11), w = 9, h = 7, p = new Pix(w, h);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+        const dx = (x - 4) / 4.4, dy = (y - 3) / 3.3, wob = 1 + (rnd() - 0.5) * 0.35;
+        if (dx * dx + dy * dy <= wob) p.set(x, y, W1);
+    }
+    return p;
+}
+
+/** One impact piece, white. */
+export function fxPiece(kind: FxKind, variant: number): Pix {
+    const v = ((variant % FX_VARIANTS[kind]) + FX_VARIANTS[kind]) % FX_VARIANTS[kind];
+    switch (kind) {
+        case 'splat': return splat(v);
+        case 'drop': return drop(v);
+        case 'ring': return ring();
+        case 'blob': return blob(v);
+        default: return fromRows(FX_ROWS[kind]![v]);
+    }
+}
+
+/** A flat ellipse w x h (the blood pool), white. */
+export function ellipse(w: number, h: number): Pix {
+    const p = new Pix(w, h), cx = (w - 1) / 2, cy = (h - 1) / 2;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+        const dx = (x - cx) / (w / 2), dy = (y - cy) / (h / 2);
+        if (dx * dx + dy * dy <= 1) p.set(x, y, W1);
+    }
     return p;
 }

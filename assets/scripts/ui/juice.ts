@@ -22,32 +22,52 @@ function square(layer: Node, name: string, w: number, h: number, color: string):
     return s;
 }
 
-/** What each suit throws: ♠ a blade streak, ♣ a glob that splats, ♥ pink motes, ♦ blue shards. */
-const LOOK: Record<Suit, { w: number; h: number; color: string; trail: string; spin: boolean; motes: number }> = {
-    S: { w: 34, h: 8, color: '#ECECE0', trail: SUIT_COLOR_HEX.S, spin: false, motes: 1 },
-    C: { w: 16, h: 16, color: '#309C63', trail: SUIT_COLOR_HEX.C, spin: false, motes: 1 },
-    H: { w: 8, h: 8, color: '#D47564', trail: '#C93038', spin: false, motes: 3 },
-    D: { w: 14, h: 14, color: '#94D2D4', trail: SUIT_COLOR_HEX.D, spin: true, motes: 1 },
+/**
+ * What each suit throws (Stage E: about twice the old size, with a bright head and a long
+ * trail that breaks into shrinking dots): ♠ a blade, ♣ a glob that splats, ♥ pink motes, ♦ blue shards.
+ */
+const LOOK: Record<Suit, { w: number; h: number; color: string; head: string; trail: string; spin: boolean; motes: number }> = {
+    S: { w: 64, h: 16, color: '#ECECE0', head: '#FDD164', trail: SUIT_COLOR_HEX.S, spin: false, motes: 1 },
+    C: { w: 30, h: 30, color: '#309C63', head: '#ECECE0', trail: SUIT_COLOR_HEX.C, spin: false, motes: 1 },
+    H: { w: 16, h: 16, color: '#D47564', head: '#ECECE0', trail: '#C93038', spin: false, motes: 3 },
+    D: { w: 26, h: 26, color: '#94D2D4', head: '#ECECE0', trail: SUIT_COLOR_HEX.D, spin: true, motes: 1 },
 };
 
 /**
- * Flies from `from` to `to` (world positions) on a curve, leaving a trail, then
+ * A random curved path from a to b (cubic, two control points). Most bow to one side by a
+ * random amount; about one in four arcs high over the table first (Stage E, decision 158).
+ */
+export function randomPath(a: Vec3, b: Vec3): { ctrl: Vec3; ctrl2: Vec3 } {
+    const dx = b.x - a.x, dy = b.y - a.y, len = Math.max(1, Math.hypot(dx, dy));
+    const nx = -dy / len, ny = dx / len;
+    const r = (k: number) => (Math.random() * 2 - 1) * k;
+    const high = Math.random() < 0.25;
+    const lift = high ? len * (0.55 + Math.random() * 0.35) : len * (0.05 + Math.random() * 0.2);
+    const bow1 = r(0.45) * len, bow2 = r(0.35) * len;
+    return {
+        ctrl: new Vec3(a.x + dx * 0.3 + nx * bow1, a.y + dy * 0.3 + ny * bow1 + lift, 0),
+        ctrl2: new Vec3(a.x + dx * 0.7 + nx * bow2, a.y + dy * 0.7 + ny * bow2 + lift * (high ? 0.9 : 0.5), 0),
+    };
+}
+
+/**
+ * Flies from `from` to `to` (world positions) on a random curve, leaving a trail, then
  * calls onLand. Hearts send a few small motes; the last one to land calls onLand.
  * The pieces are pooled (ui/particles.ts); past its cap a shot flies unseen but still lands on time.
+ * `crowd` is how many shots this event sends: the trail thins as it grows (frame budget).
  */
-export function launch(layer: Node, from: Vec3, to: Vec3, suit: Suit, onLand: () => void, delay = 0) {
+export function launch(layer: Node, from: Vec3, to: Vec3, suit: Suit, onLand: () => void, delay = 0, crowd = 1) {
     const look = LOOK[suit];
     const a = toLocal(layer, from), b = toLocal(layer, to);
     let landed = 0;
+    const every = 16 + 7 * Math.max(0, crowd - 1) + (look.motes > 1 ? 10 : 0);
     for (let m = 0; m < look.motes; m++) {
-        // The curve bows to one side; hearts' motes each take a slightly different path.
-        const dx = b.x - a.x, dy = b.y - a.y;
-        const len = Math.max(1, Math.hypot(dx, dy));
-        const bow = (0.22 + m * 0.12) * len * (m % 2 ? -1 : 1) * (dx >= 0 ? 1 : -1);
-        const ctrl = new Vec3((a.x + b.x) / 2 - (dy / len) * bow, (a.y + b.y) / 2 + (dx / len) * bow + len * 0.15, 0);
+        const { ctrl, ctrl2 } = randomPath(a, b);
         Particles.shot(layer, {
-            from: a, to: b, ctrl, w: look.w, h: look.h, color: look.color,
-            trailColor: look.trail, trailSize: Math.max(6, look.h - 2), flight: FLIGHT, delay: delay + m * 0.04,
+            from: a, to: b, ctrl, ctrl2, w: look.w, h: look.h, color: look.color,
+            headColor: look.head, headSize: Math.round(Math.min(look.w, look.h) / 4) * 2,
+            trailColor: look.trail, trailSize: Math.max(8, look.h - 4), trailEvery: every, trailLife: 0.3, trailShrink: 0.3, trailGaps: 0.2,
+            flight: FLIGHT, delay: delay + m * 0.05,
             pointAlong: suit === 'S', spin: look.spin ? 18 : 0, angle: suit === 'D' ? 45 : 0,
             onLand: () => {
                 if (suit === 'C' && layer.isValid) splat(layer, b);
@@ -112,7 +132,7 @@ export class Rig {
         if (!Game.settings.shake || !this.node.isValid) return;
         const parent = this.node.parent?.getComponent(UITransform);
         this.pivot = parent ? parent.convertToNodeSpaceAR(world) : world.clone();
-        this.zoomTo = 1.03;
+        this.zoomTo = 1.04;
         this.holdUntil = this.t + 0.16;
     }
 
@@ -121,8 +141,9 @@ export class Rig {
         this.t += dt;
         if (this.t > this.holdUntil) this.zoomTo = 1;
         this.zoom += (this.zoomTo - this.zoom) * Math.min(1, dt * (this.zoomTo > this.zoom ? 30 : 9));
-        this.trauma = Math.max(0, this.trauma - dt * 2.2);
-        const amp = 18 * this.trauma * this.trauma;
+        this.trauma = Math.max(0, this.trauma - dt * 1.8);
+        // Stage E: clearly harder (was 18 px at full trauma).
+        const amp = 34 * this.trauma * this.trauma;
         const sx = amp ? (Math.random() * 2 - 1) * amp : 0;
         const sy = amp ? (Math.random() * 2 - 1) * amp : 0;
         // Scale about the pivot: the pivot point stays where it is on screen.

@@ -155,6 +155,15 @@ async function main() {
             await new Promise((r) => setTimeout(r, 20));
             for (let i = 0; i < Number(process.env.FRAMES) && !comp.ending; i++) { Particles.tick(1 / 60); comp.update(1 / 60); }
         }
+        if (process.env.FRAMES && screen === 'RunOver') {
+            // Run the screen's own animations (the blood) for a while, for mockups.
+            await new Promise((r) => setTimeout(r, 60));
+            // The King's drop-in tween doesn't run here: settle him.
+            const settle = (n: any) => { if (n.name === 'Fallen') n.setScale(1, 1, 1); n.children.forEach(settle); };
+            settle(host);
+            const tickAll = (n: any) => { for (const c of n.components) if (c !== comp && typeof c.update === 'function') c.update(1 / 60); n.children.forEach(tickAll); };
+            for (let i = 0; i < Number(process.env.FRAMES); i++) { Particles.tick(1 / 60); tickAll(host); }
+        }
         if (process.env.SIMULATE && screen === 'Fight') {
             // Play the whole fight frame by frame and report. PERF=1: tweens run over time
             // (like Cocos), so the per-frame work counts include projectiles and trails in flight.
@@ -232,7 +241,8 @@ async function main() {
             const spr = n.getComponent<Sprite>(Sprite) as any;
             const fillHex = spr && !spr.spriteFrame && spr.color && !(spr.color.r === 255 && spr.color.g === 255 && spr.color.b === 255)
                 ? '#' + [spr.color.r, spr.color.g, spr.color.b].map((v: number) => v.toString(16).padStart(2, '0')).join('') : undefined;
-            const frame = spr?.spriteFrame?.name as string | undefined;
+            // A sprite running a shader (the boss aura) can't be painted here: leave it out.
+            const frame = spr?.customMaterial ? undefined : spr?.spriteFrame?.name as string | undefined;
             if (frame?.startsWith('kitC:') && !frames[frame]) {
                 // kitC keeps each piece's own pixels on its frame (_pix), as a page holds many.
                 const pix = spr.spriteFrame._pix;

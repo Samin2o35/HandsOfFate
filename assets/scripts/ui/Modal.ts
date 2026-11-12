@@ -8,7 +8,8 @@ import { Node, UITransform, Color, BlockInputEvents, tween, Vec3 } from 'cc';
 import { Sound } from '../app/Sound';
 import { ACES, AceId } from '../core/achievements';
 import { UiKit, makeNode, makeSprite, makeLabel, makeButton, FONT } from './UiKit';
-import { frame, ringFrame, ovalFrame, INK_TEXT } from './kitC';
+import { frame, ringFrame, INK_TEXT } from './kitC';
+import { Aura } from '../app/Aura';
 import { ButtonStyle } from './UiButton';
 import { sparks, FX_COLOR } from './fx';
 import { jokerLine } from './joker';
@@ -50,10 +51,9 @@ export function celebrateAce(host: Node, id: AceId, onClose?: () => void): Node 
 
     // Landscape: banner on top, the card on the left, its name and the button on the right.
     makeLabel(layer, 'Banner', 'ACE EARNED', { size: FONT.title, spacing: 5, color: INK_TEXT.gold, y: 380 });
-    // The card at 2× with a dotted gold ring and a breathing gold oval round it.
+    // The card at 2× with a dotted gold ring, in a gold aura of the background's smoke (decision 163).
     const holder = makeNode(layer, 'Card', 200, 280, { x: -420, y: -10 });
-    const glow = makeSprite(holder, 'Glow', ovalFrame(300, 380, INK_TEXT.gold), 300, 380);
-    tween(glow.node).repeatForever(tween(glow.node).to(0.6, { scale: new Vec3(1.06, 1.06, 1) }).to(0.6, { scale: new Vec3(1, 1, 1) })).start();
+    Aura.attach(holder, 'Aura', 204, 276, {}, INK_TEXT.gold, { above: 150, side: 80, below: 50 });
     makeSprite(holder, 'Ace', kit.classicFrame({ suit: ace.suit, rank: 14 }), 180, 252);
     makeSprite(holder, 'Ring', ringFrame(204, 276, 'gold'), 204, 276);
     holder.setScale(0.2, 0.2, 1);

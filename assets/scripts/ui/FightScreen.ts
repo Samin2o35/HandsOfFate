@@ -5,7 +5,7 @@
 //   - each badge's ring fills as its hand charges; spent hands dim
 //   - a firing hand lights its badge, its line in your list and its cards
 //   - their firing hand lights its line in their panel
-//   - cells change on the target grid with a flash ring, sparks and a number
+//   - cells change on the target grid with a flash ring, an impact per effect (ui/impacts.ts) and a number
 //   - round time and the live round score sit in the top strip
 // Slow / Medium / Fast under the opponent panel; Options pauses. When a side's
 // grid is empty and the last projectile has landed: "ROUND WON" or "THE KING HAS
@@ -37,10 +37,10 @@ import { BoardView, worldRect, unionRects } from './BoardView';
 import { paintHealth, HealthGridParts } from './views';
 import { frame, INK_TEXT } from './kitC';
 import { healthCols } from '../core/health';
-import { flashRing, sparks, FX_COLOR } from './fx';
+import { flashRing, FX_COLOR } from './fx';
+import { bloodBurst, splatOn, cellBleed, ooze, healSparkle, shieldFlash, blockedBounce, flinch, bleedOn } from './impacts';
 import { launch, popNumber, tickJuice, Rig, dimLights, starBurst, firePop } from './juice';
 import { Smoke } from '../app/Smoke';
-import { shake } from './fx';
 import { Suit } from '../core/cards';
 import { HandCategory } from '../core/hands';
 import { finishRound } from './flow';
@@ -367,7 +367,7 @@ export class FightScreen extends GameScreen {
         const targets = touched.map((i) => parts.cells[i].node.worldPosition);
         if (e.kind === 'twist') {
             dimLights(this.node);
-            if (this.avatar) shake(this.avatar, 8);
+            if (this.avatar && Game.settings.shake) flinch(this.avatar, 0.5);
         }
         Smoke.puff(sources[0], 0.3);
         this.inFlight++;
@@ -375,9 +375,11 @@ export class FightScreen extends GameScreen {
         let pending = sources.length;
         // The throw sounds as the cards let go; the impact sound plays when it lands.
         if (e.kind === 'hand') Sound.play(`throw_${suit}` as Sfx);
+        // Which way the shots were going (blood sprays on, armour shards bounce back).
+        const dir = new Vec3(targets[0].x - sources[0].x, targets[0].y - sources[0].y, 0);
         sources.forEach((src, k) => launch(this.fx!, src, targets[k % targets.length], suit, () => {
-            if (--pending === 0) this.land(e, diff, after, touched);
-        }, e.kind === 'twist' ? 0.25 : 0));
+            if (--pending === 0) this.land(e, diff, after, touched, dir);
+        }, e.kind === 'twist' ? 0.25 : 0, sources.length));
     }
 
     /** Where an event's projectiles start (world positions). */
@@ -401,7 +403,7 @@ export class FightScreen extends GameScreen {
     }
 
     /** A projectile arrived: now the cells change, with the number, stop, shake and puff. */
-    private land(e: FightEvent, diff: Diff, after: { state: string; shield: boolean }[], touched: number[]) {
+    private land(e: FightEvent, diff: Diff, after: { state: string; shield: boolean }[], touched: number[], dir: Vec3) {
         this.inFlight = Math.max(0, this.inFlight - 1);
         const shown = this.shown![e.target];
         for (const i of touched) {
@@ -411,14 +413,22 @@ export class FightScreen extends GameScreen {
         const parts = this.grids[e.target];
         if (!parts?.node.isValid) return;
         paintHealth(parts, shown);
-        const centre = this.cellEffects(parts, e, diff);
+        const centre = this.cellEffects(parts, e, diff, dir);
         playEventSound(e, diff);
         this.refreshTexts();
         const hits = diff.destroyed.length;
         if (hits) {
-            this.freezeUntil = Math.max(this.freezeUntil, this.clock + Math.min(0.08, 0.04 + hits * 0.008));
-            this.rig?.shake(Math.min(1, 0.12 + hits * 0.07));
+            this.freezeUntil = Math.max(this.freezeUntil, this.clock + Math.min(0.1, 0.05 + hits * 0.01));
+            // Stage E (decision 160): harder, and scaled by the damage. Off with Options → Screen shake.
+            this.rig?.shake(Math.min(1, 0.22 + hits * 0.11));
             Smoke.puff(centre, Math.min(1, 0.3 + hits * 0.1));
+            // The one hurt flinches; blood for cuts, not for rot (decision 159).
+            const amount = Math.min(1, hits / 6);
+            const hurt = e.target === 'enemy' ? this.avatar : parts.node;
+            if (hurt?.isValid) {
+                if (Game.settings.shake) flinch(hurt, amount);
+                if (e.effect !== 'rot') bleedOn(this.fx!, hurt, amount);
+            }
         }
         if (e.hand && BIG.has(e.hand.category)) this.rig?.punch(centre);
         this.react(e, diff);
@@ -435,21 +445,41 @@ export class FightScreen extends GameScreen {
         this.quietUntil = this.clock + 5;
     }
 
-    private cellEffects(parts: HealthGridParts, e: FightEvent, d: Diff): Vec3 {
+    private cellEffects(parts: HealthGridParts, e: FightEvent, d: Diff, dir: Vec3 | null = null): Vec3 {
         const fx = this.fx!;
         const size = parts.cells[0]?.node.getComponent(UITransform)?.width ?? 24;
         const ring = (i: number, color: string) => {
             const cell = parts.cells[i];
             if (cell) flashRing(fx, cell.node.worldPosition, size, color);
         };
-        for (const i of d.destroyed) {
-            ring(i, e.effect === 'rot' ? FX_COLOR.rot : FX_COLOR.hit);
+        // One impact per cell, the look picked at random inside each (ui/impacts.ts). A big hit
+        // gives the full burst on its first three cells, a splat on the rest, and bleeds from
+        // up to six (frame budget: decision 161).
+        const big = Math.min(1, d.destroyed.length / 6);
+        d.destroyed.forEach((i, k) => {
             const cell = parts.cells[i];
-            if (cell) sparks(fx, cell.node.worldPosition, e.effect === 'rot' ? FX_COLOR.rot : FX_COLOR.red);
+            ring(i, e.effect === 'rot' ? FX_COLOR.rot : FX_COLOR.hit);
+            if (!cell) return;
+            const at = cell.node.worldPosition;
+            if (e.effect === 'rot') { if (k < 4) ooze(fx, at, size); return; }
+            if (k < 3) bloodBurst(fx, at, big, dir); else splatOn(fx, at);
+            if (k < 6) cellBleed(fx, at, size);
+        });
+        for (const i of d.popped) {
+            ring(i, FX_COLOR.shield);
+            const cell = parts.cells[i];
+            if (cell) blockedBounce(fx, cell.node.worldPosition, dir);
         }
-        for (const i of d.popped) ring(i, FX_COLOR.shield);
-        for (const i of d.healed) ring(i, FX_COLOR.heal);
-        for (const i of d.shielded) ring(i, FX_COLOR.shield);
+        for (const i of d.healed) {
+            ring(i, FX_COLOR.heal);
+            const cell = parts.cells[i];
+            if (cell) healSparkle(fx, cell.node.worldPosition, size);
+        }
+        for (const i of d.shielded) {
+            ring(i, FX_COLOR.shield);
+            const cell = parts.cells[i];
+            if (cell) shieldFlash(fx, cell.node.worldPosition);
+        }
 
         const touched = d.destroyed.concat(d.popped, d.healed, d.shielded);
         const centre = new Vec3();

@@ -17,6 +17,7 @@ import { ButtonStyle } from './UiButton';
 import { CARD_W, CARD_H, buildAvatar } from './views';
 import { dashedLine, statRow } from './parts';
 import { celebrateAces } from './Modal';
+import { RunOverBlood } from './runOverBlood';
 const { ccclass } = _decorator;
 
 const MARGIN = 30;
@@ -65,6 +66,8 @@ export class RunOverScreen extends GameScreen {
         const art = makeSprite(root, 'Fallen', kit.frame('concept/king_fallen_1x'), artW, 720, { x: L0 + 40 + artW / 2, y: 0 });
         art.node.setScale(1.08, 1.08, 1);
         tween(art.node).to(0.5, { scale: new Vec3(1, 1, 1) }, { easing: 'quadOut' }).start();
+        // Blood runs down the card's edges and pools beneath it, looping slowly (Stage E, decision 162).
+        RunOverBlood.attach(root, art.node, artW, 720);
         const L = L0 + 40 + artW + 80;
         const innerW = R - L;
         const cx = L + innerW / 2;

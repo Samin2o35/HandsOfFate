@@ -160,12 +160,6 @@ export function ringFrame(w: number, h: number, kind: 'gold' | 'pink' | 'slot' |
     return toFrame(px.dottedRect(aw, ah, col), `ring:${aw}x${ah}:${kind}`);
 }
 
-/** A dotted oval w x h screen pixels in any colour (the boss's glow in his suit colour). */
-export function ovalFrame(w: number, h: number, hexColor: string): SpriteFrame {
-    const aw = art(w), ah = art(h);
-    return toFrame(px.dottedOval(aw, ah, px.hex(hexColor)), `oval:${aw}x${ah}:${hexColor}`);
-}
-
 /** A flat progress fill `w` screen pixels long at `fraction`, 2 art px high, in a colour. */
 export function barFrame(w: number, fraction: number, hexColor: string): SpriteFrame {
     const aw = art(w), f = Math.round(aw * Math.max(0, Math.min(1, fraction)));
@@ -238,3 +232,23 @@ export const INK_TEXT = {
 
 export function tint(s: Sprite, hexColor: string) { s.color = new Color().fromHEX(hexColor); }
 export type { UITransform };
+
+// ---- Impact pieces (Stage E, decision 158) -------------------------------------------------------
+
+/** One white impact piece (tint it), with its screen size (2 px per art px). */
+export function fxFrame(kind: px.FxKind, variant = 0): { frame: SpriteFrame; w: number; h: number } {
+    const v = variant % px.FX_VARIANTS[kind];
+    const p = px.fxPiece(kind, v);
+    return { frame: toFrame(p, `fx:${kind}:${v}`), w: p.w * 2, h: p.h * 2 };
+}
+
+/** A random variant of a piece. */
+export function fxAny(kind: px.FxKind): { frame: SpriteFrame; w: number; h: number } {
+    return fxFrame(kind, Math.floor(Math.random() * px.FX_VARIANTS[kind]));
+}
+
+/** A white flat ellipse w x h screen pixels (the blood pool). */
+export function ellipseFrame(w: number, h: number): SpriteFrame {
+    const aw = art(w), ah = art(h);
+    return toFrame(px.ellipse(aw, ah), `ell:${aw}x${ah}`);
+}

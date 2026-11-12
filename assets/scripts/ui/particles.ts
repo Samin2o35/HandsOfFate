@@ -19,7 +19,9 @@ import { makeLabel, makeSprite, FONT } from './UiKit';
 const { ccclass } = _decorator;
 
 /** At most this many of each live at once; past it, new dots are skipped and shots fly unseen. */
-export const LIMITS = { dots: 420, shots: 64, numbers: 16 };
+export const LIMITS = { dots: 460, shots: 64, numbers: 16 };
+/** Trails stop adding dots this close to the dot cap, so impacts always have room (Stage E). */
+export const TRAIL_ROOM = 240;
 
 export type Ease = (t: number) => number;
 export const EASE = {
@@ -48,12 +50,25 @@ export interface DotOptions {
     hideFrom?: number; hideTo?: number;
     /** Draw just below this node (trail dots under their projectile). */
     below?: Node;
+    /** Physics instead of a tween move (Stage E): velocity px/s, gravity px/s² (down). */
+    vx?: number; vy?: number; gravity?: number;
+    /** Quarter turns per second (whole quarter turns only, so the pixels stay square). */
+    spin?: number;
+    /** Scale from → to over the life (linear). */
+    scaleFrom?: number; scaleTo?: number;
+    /** Seconds before it appears. */
+    delay?: number;
 }
 
 export interface ShotOptions {
     from: Vec3; to: Vec3;
-    /** Control point of the quadratic curve. */
+    /** Control point of the quadratic curve; with ctrl2 the curve is cubic. */
     ctrl: Vec3;
+    ctrl2?: Vec3;
+    /** A small bright head drawn over the body (Stage E). */
+    headColor?: string; headSize?: number;
+    /** Trail: a dot every `trailEvery` px (default 14), living `trailLife` s (0.18), shrinking to `trailShrink` (1), with gaps (0..1 chance to skip). */
+    trailEvery?: number; trailLife?: number; trailShrink?: number; trailGaps?: number;
     w: number; h: number;
     color: string;
     trailColor: string; trailSize: number;
@@ -75,10 +90,11 @@ interface Piece { node: Node; sprite: Sprite; op: UIOpacity; ut: UITransform; }
 
 interface Dot extends Piece {
     age: number; life: number; o: DotOptions; swapped: boolean; hidden: boolean;
+    x: number; y: number; vx: number; vy: number; shown: boolean;
 }
 
 interface Shot {
-    layer: Node; piece: Piece | null; age: number; o: ShotOptions;
+    layer: Node; piece: Piece | null; head: Piece | null; age: number; o: ShotOptions;
     lastX: number; lastY: number; started: boolean;
 }
 
@@ -143,8 +159,11 @@ export class Particles extends Component {
         const p = take(layer, o.frame ?? whiteFrame(), o.w, o.h, o.color, o.below);
         p.node.setPosition(o.x, o.y, 0);
         if (o.angle) p.node.angle = o.angle;
+        if (o.scaleFrom !== undefined) p.node.setScale(o.scaleFrom, o.scaleFrom, 1);
+        const delay = o.delay ?? 0;
+        if (delay > 0) p.node.active = false;
         const end = Math.max(o.move ?? 0, (o.fadeDelay ?? 0) + (o.fade ?? 0));
-        dots.push({ ...p, age: 0, life: o.life ?? end, o, swapped: false, hidden: false });
+        dots.push({ ...p, age: -delay, life: o.life ?? end, o, swapped: false, hidden: false, x: o.x, y: o.y, vx: o.vx ?? 0, vy: o.vy ?? 0, shown: delay <= 0 });
     }
 
     static shot(layer: Node, o: ShotOptions): void {
@@ -156,7 +175,14 @@ export class Particles extends Component {
             piece.node.active = false;
             if (o.angle) piece.node.angle = o.angle;
         } else particleStats.skipped++;
-        shots.push({ layer, piece, age: -(o.delay ?? 0), o, lastX: o.from.x, lastY: o.from.y, started: false });
+        let head: Piece | null = null;
+        if (piece && o.headColor) {
+            const hs = o.headSize ?? Math.max(4, Math.round(Math.min(o.w, o.h) / 2));
+            head = take(layer, whiteFrame(), hs, hs, o.headColor);
+            head.node.setPosition(o.from);
+            head.node.active = false;
+        }
+        shots.push({ layer, piece, head, age: -(o.delay ?? 0), o, lastX: o.from.x, lastY: o.from.y, started: false });
     }
 
     static number(layer: Node, o: NumberOptions): void {
@@ -197,11 +223,25 @@ export class Particles extends Component {
             const d = dots[i];
             d.age += dt;
             if (!d.node.isValid) { dots.splice(i, 1); continue; }
+            if (d.age < 0) continue;
+            if (!d.shown) { d.shown = true; d.node.active = true; }
             if (d.age >= d.life) { give(d); dots.splice(i, 1); continue; }
             const o = d.o;
             if (o.move && o.tx !== undefined && o.ty !== undefined) {
                 const k = (o.ease ?? EASE.linear)(Math.min(1, d.age / o.move));
                 d.node.setPosition(o.x + (o.tx - o.x) * k, o.y + (o.ty - o.y) * k, 0);
+            } else if (o.vx !== undefined || o.vy !== undefined || o.gravity) {
+                d.vy -= (o.gravity ?? 0) * dt;
+                d.x += d.vx * dt; d.y += d.vy * dt;
+                // On the 2 px art grid, so the pieces stay crisp.
+                d.node.setPosition(Math.round(d.x / 2) * 2, Math.round(d.y / 2) * 2, 0);
+            }
+            if (o.spin) d.node.angle = (o.angle ?? 0) + Math.floor(d.age * o.spin) * 90;
+            if (o.scaleTo !== undefined) {
+                const a = o.scaleFrom ?? 1, k = Math.min(1, d.age / Math.max(0.001, d.life));
+                // Stepped so the drawn size stays a whole number of art pixels.
+                const big = Math.max(2, o.w, o.h), sc = Math.max(2, Math.round((a + (o.scaleTo - a) * k) * big / 2) * 2) / big;
+                d.node.setScale(sc, sc, 1);
             }
             if (o.fade) {
                 const f = (d.age - (o.fadeDelay ?? 0)) / o.fade;
@@ -225,22 +265,42 @@ export class Particles extends Component {
             if (s.age < 0) continue;
             const o = s.o, p = s.piece;
             if (p && !p.node.isValid) s.piece = null;
-            if (s.piece && !s.started) { s.started = true; s.piece.node.active = true; }
+            if (s.head && !s.head.node.isValid) s.head = null;
+            if (s.piece && !s.started) { s.started = true; s.piece.node.active = true; if (s.head) s.head.node.active = true; }
             const t = EASE.sineIn(Math.min(1, s.age / o.flight)), u = 1 - t;
-            const x = u * u * o.from.x + 2 * u * t * o.ctrl.x + t * t * o.to.x;
-            const y = u * u * o.from.y + 2 * u * t * o.ctrl.y + t * t * o.to.y;
+            let x: number, y: number;
+            if (o.ctrl2) {
+                // Cubic: two control points (Stage E's random paths).
+                const a = u * u * u, b = 3 * u * u * t, c = 3 * u * t * t, d = t * t * t;
+                x = a * o.from.x + b * o.ctrl.x + c * o.ctrl2.x + d * o.to.x;
+                y = a * o.from.y + b * o.ctrl.y + c * o.ctrl2.y + d * o.to.y;
+            } else {
+                x = u * u * o.from.x + 2 * u * t * o.ctrl.x + t * t * o.to.x;
+                y = u * u * o.from.y + 2 * u * t * o.ctrl.y + t * t * o.to.y;
+            }
             if (s.piece) {
                 const n = s.piece.node;
-                if (o.pointAlong) n.angle = Math.atan2(y - n.position.y, x - n.position.x) * 180 / Math.PI;
+                const ang = Math.atan2(y - n.position.y, x - n.position.x) * 180 / Math.PI;
+                if (o.pointAlong) n.angle = ang;
                 if (o.spin) n.angle += o.spin;
                 n.setPosition(x, y, 0);
-                if (Math.hypot(x - s.lastX, y - s.lastY) > 14) {
-                    Particles.dot(s.layer, { x, y, w: o.trailSize, h: o.trailSize, color: o.trailColor, fade: 0.18, below: n });
+                if (s.head) {
+                    // The head sits at the front of the body, along its path.
+                    const r = (o.pointAlong ? o.w : Math.max(o.w, o.h)) / 4, rad = ang * Math.PI / 180;
+                    s.head.node.setPosition(x + Math.cos(rad) * r, y + Math.sin(rad) * r, 0);
+                }
+                const every = o.trailEvery ?? 14;
+                if (Math.hypot(x - s.lastX, y - s.lastY) > every) {
+                    if ((!o.trailGaps || Math.random() >= o.trailGaps) && dots.length < LIMITS.dots - TRAIL_ROOM) {
+                        Particles.dot(s.layer, { x, y, w: o.trailSize, h: o.trailSize, color: o.trailColor, fade: o.trailLife ?? 0.18,
+                            scaleFrom: 1, scaleTo: o.trailShrink ?? 1, below: n });
+                    }
                     s.lastX = x; s.lastY = y;
                 }
             }
             if (s.age >= o.flight) {
                 if (s.piece) give(s.piece);
+                if (s.head) give(s.head);
                 shots.splice(i, 1);
                 o.onLand();
             }

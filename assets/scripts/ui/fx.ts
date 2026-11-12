@@ -2,12 +2,11 @@
 // Short effects drawn on an effects layer above everything:
 //   flashRing  a crisp outline that pops round a cell and blinks out (hit, heal, rot, shield)
 //   sparks     a few pixel squares flying out from a hit
-//   shake      a quick shake of a node (a grid being hit)
 // Positions are world positions (node.worldPosition), so effects line up with
 // whatever they're about, wherever it sits on screen. Flashes and sparks are pooled
 // pieces of ui/particles.ts (Stage B).
 
-import { Node, Vec3, tween } from 'cc';
+import { Node, Vec3 } from 'cc';
 import { flashFrame } from './kitC';
 import { Particles, EASE, toLayer } from './particles';
 
@@ -46,14 +45,4 @@ export function sparks(layer: Node, world: Vec3, color: string, count = 4) {
             fade: 0.25, fadeDelay: 0.15,
         });
     }
-}
-
-export function shake(n: Node, strength = 6) {
-    const home = n.position.clone();
-    tween(n)
-        .to(0.04, { position: new Vec3(home.x + strength, home.y, 0) })
-        .to(0.04, { position: new Vec3(home.x - strength, home.y, 0) })
-        .to(0.04, { position: new Vec3(home.x + strength / 2, home.y, 0) })
-        .to(0.04, { position: home })
-        .start();
 }
