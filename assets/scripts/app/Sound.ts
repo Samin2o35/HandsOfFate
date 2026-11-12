@@ -8,7 +8,7 @@
 // From any script:  Sound.play('hit')   Sound.music('fight')   Sound.music(null)
 // Settings (Options screen): Game.settings.music / Game.settings.sfx.
 
-import { _decorator, Component, AudioSource, AudioClip, resources, input, Input, director } from 'cc';
+import { _decorator, Component, AudioSource, AudioClip, resources, input, Input, game } from 'cc';
 import { Game } from './Game';
 const { ccclass } = _decorator;
 
@@ -26,7 +26,6 @@ export const SFX_NAMES: readonly Sfx[] = [
     'hit', 'hurt', 'rot', 'block', 'heal', 'shield', 'twist', 'win', 'lose', 'tick', 'total', 'boss', 'ace', 'dealer',
     'throw_S', 'throw_H', 'throw_C', 'throw_D',
 ];
-export const MUSIC_NAMES: readonly Music[] = ['menu', 'fight', 'boss'];
 
 /**
  * Per-sound trim (0..1). The sounds are made by tools/audio/make_sfx.py with their
@@ -103,7 +102,8 @@ export class Sound extends Component {
         if (!Game.settings.sfx || !this.sfxSource) return;
         const clip = this.clips.get(name);
         if (!clip) return;
-        const now = director.getTotalTime() / 1000;
+        // game.totalTime, not the deprecated director.getTotalTime, which warned on every sound (decision 165).
+        const now = game.totalTime / 1000;
         if (now - (this.lastPlayed.get(name) ?? -1) < MIN_GAP) return;
         this.lastPlayed.set(name, now);
         this.sfxSource.playOneShot(clip, volume * (SFX_VOLUME[name] ?? 1));

@@ -13,7 +13,7 @@ import { Suit, SUIT_COLOR_HEX } from '../core/cards';
 import { BOSSES, twistText, twistChange, meetingText, tierNumeral } from '../core/bosses';
 import { UiKit, makeNode, makeSprite, makeLabel, makeButton, clearChildren, textWidth, FONT } from './UiKit';
 import { frame, INK_TEXT } from './kitC';
-import { Aura } from '../app/Aura';
+import { Flame } from './flame';
 import { ButtonStyle } from './UiButton';
 import { buildAvatar } from './views';
 import { buildOpponentStrip } from './OpponentStrip';
@@ -67,9 +67,9 @@ export class BossIntroScreen extends GameScreen {
         const colL = L + leftW + 60, colW = R - colL;
         const colX = colL + colW / 2;
 
-        // The King, animated, in an aura of the background's smoke in his suit colour (Stage E, decision 163).
+        // The King, animated, with a pixel fire in his suit's colours burning behind him (decision 167).
         const kingY = 40;
-        Aura.attach(root, 'Aura', 270, 378, { x: leftX, y: kingY }, suitColor);
+        Flame.attach(root, 'Flame', 270, 378, { x: leftX, y: kingY }, boss.suit);
         const king = buildAvatar(root, 'King', { suit: boss.suit, rank: 13 }, true, 270, 378, { x: leftX, y: kingY }).node;
         // He drops in.
         king.setScale(1.25, 1.25, 1);

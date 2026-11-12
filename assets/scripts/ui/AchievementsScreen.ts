@@ -37,8 +37,8 @@ export class AchievementsScreen extends GameScreen {
         const T = H / 2, B = -H / 2;
 
         const plaque = frame(root, 'Plaque', 520, 130, { y: T - 40 - 65 }, { closed: true });
-        makeLabel(plaque, 'Title', 'THE FOUR ACES', { size: FONT.heading + 9, spacing: 3, color: INK_TEXT.main, y: 20 });
-        makeLabel(plaque, 'Sub', 'The hardest feats. Each takes many runs.', { font: 'body', size: FONT.bodySmall, color: INK_TEXT.second, y: -24 });
+        makeLabel(plaque, 'Title', 'ACHIEVEMENTS', { size: FONT.heading + 9, spacing: 3, color: INK_TEXT.main, y: 20 });
+        makeLabel(plaque, 'Sub', 'Four Aces, the hardest feats. Each takes many runs.', { font: 'body', size: FONT.bodySmall, color: INK_TEXT.second, y: -24 });
 
         // One row of four, centred between the plaque and the Back button.
         const colX = [-690, -230, 230, 690];

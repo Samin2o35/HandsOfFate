@@ -5,7 +5,7 @@
 // It also turns off the dynamic atlas, which would otherwise copy small sprites
 // into a shared, linearly filtered texture and blur the pixel art.
 
-import { _decorator, Component, view, screen, ResolutionPolicy, dynamicAtlasManager } from 'cc';
+import { _decorator, Component, view, screen, ResolutionPolicy, DynamicAtlasManager } from 'cc';
 const { ccclass } = _decorator;
 
 export const DESIGN_W = 1920;
@@ -17,7 +17,7 @@ export class ScreenFit extends Component {
     static currentFit: 'width' | 'height' = 'height';
 
     onLoad() {
-        dynamicAtlasManager.enabled = false;
+        DynamicAtlasManager.instance.enabled = false;
         this.apply();
         screen.on('window-resize', this.apply, this);
         screen.on('orientation-change', this.apply, this);

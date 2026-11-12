@@ -204,7 +204,12 @@ export interface ListEntry {
     pips: Node[];
     /** The charging outline round the line (only when the list was built with traces: the fight). */
     trace: Trace | null;
+    /** The high-card line stands for every leftover card: they all light it (decision 164). */
+    group?: Hand[];
 }
+
+/** The high-card line's name and effect text: "High cards ×3", "Alone 5.0s". */
+function highCardName(n: number): string { return n === 1 ? 'High card' : `High cards ×${n}`; }
 
 /** "R2" / "C3" */
 export function lineTag(h: Hand): string {
@@ -236,9 +241,12 @@ export function buildHandList(root: Node, hands: readonly Hand[], left: number, 
     opts: HandListOptions | ((hand: Hand) => void) = {}): { entries: ListEntry[]; bottom: number } {
     const o: HandListOptions = typeof opts === 'function' ? { onTap: opts } : opts;
     const cooldownOf = o.cooldownOf ?? ((h: Hand) => h.cooldown);
-    const lines = hands.filter((h) => h.source !== 'leftover');
-    const leftovers = hands.length - lines.length;
-    const extra = leftovers || lines.length === 0 ? 34 : 0;
+    // Leftover cards fire alone as high cards; together they get one real line, traced and lit
+    // like the others (decision 164), so you can see them charge and fire.
+    const highs = hands.filter((h) => h.source !== 'row' && h.source !== 'col');
+    const lines = hands.filter((h) => h.source === 'row' || h.source === 'col');
+    if (highs.length) lines.push(highs[0]);
+    const extra = lines.length === 0 ? 34 : 0;
     const head = 44;
     const onePitch = Math.min(58, Math.floor((maxH - head - extra) / Math.max(1, lines.length)));
     const two = lines.length > ONE_COLUMN_MAX || onePitch < MIN_PITCH;
@@ -258,20 +266,17 @@ export function buildHandList(root: Node, hands: readonly Hand[], left: number, 
         const trace = o.traces ? new Trace(n, 'Trace', cw + 8, rowH - 2) : null;
         const back = makeSprite(n, 'Ring', ringFrame(cw + 8, rowH - 2, 'gold'), cw + 8, rowH - 2);
         back.node.active = false;
-        const pips = two ? compactEntry(n, hand, cw, rowH, cooldownOf(hand)) : wideEntry(n, hand, cw, rowH, cooldownOf(hand));
+        const group = hand.source === 'leftover' ? highs : undefined;
+        const pips = group ? highEntry(n, group, cw, rowH, cooldownOf(hand), two)
+            : two ? compactEntry(n, hand, cw, rowH, cooldownOf(hand)) : wideEntry(n, hand, cw, rowH, cooldownOf(hand));
         // A dotted rule under each line, except the last of a column with nothing below it.
         if (k < perCol - 1 || extra) rule(root, `Rule ${i}`, cw - 12, cx - cw / 2 + 6, rowTop - pitch + 4);
         if (o.onTap) { const tap = o.onTap; n.on(Node.EventType.TOUCH_END, () => tap(hand)); }
-        entries.push({ hand, node: n, back, pips, trace });
+        entries.push({ hand, node: n, back, pips, trace, group });
     });
     const tailY = top - 34 - perCol * pitch - 17;
     if (lines.length === 0) {
         makeLabel(root, 'NoHands', 'No hands yet: fill a row or a column.', { font: 'body', size: 26, color: GREY.dim, align: 'left', x: left + 8, y: tailY, width: w - 8, height: 30 });
-    } else if (leftovers) {
-        // One compact line for the leftovers (they fire alone, each as a high card).
-        const text = two || w < 300 ? `+ ${leftovers} high card${leftovers > 1 ? 's' : ''}, alone`
-            : `+ ${leftovers} card${leftovers > 1 ? 's fire' : ' fires'} alone as ${leftovers > 1 ? 'high cards' : 'a high card'}`;
-        makeLabel(root, 'Leftovers', text, { font: 'body', size: 26, color: GREY.dim, align: 'left', x: left + 8, y: tailY, width: w - 8, height: 30 });
     }
     return { entries, bottom: top - hh };
 }
@@ -293,6 +298,21 @@ function wideEntry(n: Node, hand: Hand, w: number, rowH: number, cooldown: numbe
     const nameW = Math.max(60, Math.floor(w / 2 - 4 - pipsW - textWidth(effect) - 12 - nameLeft));
     makeLabel(n, 'Name', HAND_INFO[hand.category].name, { size: 24, color: GREY.text, align: 'left', x: nameLeft, width: nameW, height: Math.max(20, rowH - 8) });
     return pips;
+}
+
+/** The high-card line: "HI", a pip per card's suit, "High cards ×3", "Alone 5.0s" (decision 164). */
+function highEntry(n: Node, group: Hand[], w: number, rowH: number, cooldown: number, two: boolean): Node[] {
+    const kit = UiKit.get();
+    const x0 = -w / 2;
+    const up = two ? Math.min(12, rowH / 4) : 0, down = two ? -Math.min(13, rowH / 4) : 0;
+    const effect = makeLabel(n, 'Effect', `Alone ${cooldownText(cooldown)}`, { font: 'body', size: two ? 26 : 27, color: GREY.soft, align: 'right', x: w / 2 - 4, y: down });
+    const name = makeLabel(n, 'Name', highCardName(group.length), { size: two ? 22 : 24, color: GREY.text, align: 'left', x: x0 + (two ? 4 : 6), y: up,
+        width: two ? w - 8 : Math.max(60, Math.floor(w - textWidth(effect) - 24 - Math.min(group.length, 5) * 19)), height: 26 });
+    // One small pip per card, in its suit, after the name (or under it in two columns).
+    const shown = group.slice(0, 5);
+    const px0 = two ? x0 + 12 : x0 + 14 + textWidth(name) + 12;
+    shown.forEach((h, i) => makeSprite(n, `Suit${i}`, kit.suitIcon(h.suit), 16, 16, { x: px0 + i * 19, y: down }));
+    return [];
 }
 
 /** Two short lines in half the width: pip and name on top; tag, effect and timer, pips below. */
@@ -391,7 +411,10 @@ export function buildOpponentPanel(root: Node, r: Region, o: Opponent, hands: re
     // Their hands, as many as fit above their health.
     const lines = new Map<string, Node>();
     const traces = new Map<string, Trace>();
-    const listed = hands.filter((h) => h.source !== 'leftover');
+    const lineHands = hands.filter((h) => h.source === 'row' || h.source === 'col');
+    const highs = hands.filter((h) => h.source !== 'row' && h.source !== 'col');
+    // Their high cards get one line too, so they can be seen charging and firing (decision 164).
+    const listed = highs.length ? [...lineHands, highs[0]] : lineHands;
     const gridRows = Math.ceil(total / healthCols(total));
     // Keep room for a few of their hands first (up to 3, plus a "+n more" line), then size the grid to what's left.
     const want = Math.min(listed.length, 3) * 50 + (listed.length > 3 ? 34 : 0);
@@ -407,13 +430,15 @@ export function buildOpponentPanel(root: Node, r: Region, o: Opponent, hands: re
     shown.forEach((h, i) => {
         const y = top - 311 - i * 50;
         const lw = Math.round((r.width - 44) / 2) * 2;
-        if (withTraces) traces.set(h.id, new Trace(panel, `Trace ${h.id}`, lw, 46, 0, y));
+        const group = h.source === 'leftover' ? highs : [h];
+        const tr = withTraces ? new Trace(panel, `Trace ${h.id}`, lw, 46, 0, y) : null;
         const ring = makeSprite(panel, `Their ${h.id}`, ringFrame(r.width - 44, 46, 'gold'), lw, 46, { y }).node;
         ring.active = false;
-        lines.set(h.id, ring);
+        for (const g of group) { lines.set(g.id, ring); if (tr) traces.set(g.id, tr); }
         makeSprite(panel, `Icon ${h.id}`, kit.suitIcon(h.suit), 36, 36, { x: x0 + 18, y });
-        makeLabel(panel, `Name ${h.id}`, HAND_INFO[h.category].name, { size: 28, color: GREY.text, align: 'left', x: x0 + 50, y, width: 224, height: 40 });
-        makeLabel(panel, `Effect ${h.id}`, EFFECT_NAME[h.effect], { font: 'body', size: 32, color: GREY.soft, align: 'left', x: x0 + 290, y });
+        const name = h.source === 'leftover' ? highCardName(group.length) : HAND_INFO[h.category].name;
+        makeLabel(panel, `Name ${h.id}`, name, { size: 28, color: GREY.text, align: 'left', x: x0 + 50, y, width: 224, height: 40 });
+        makeLabel(panel, `Effect ${h.id}`, h.source === 'leftover' ? 'Alone' : EFFECT_NAME[h.effect], { font: 'body', size: 32, color: GREY.soft, align: 'left', x: x0 + 290, y });
         makeLabel(panel, `Line ${h.id}`, `every ${cooldownText(cooldownOf(h))}`, { font: 'body', size: 32, color: GREY.soft, align: 'right', x: r.width / 2 - 30, y });
         rule(panel, `Rule ${h.id}`, r.width - 60, x0, y - 24);
     });

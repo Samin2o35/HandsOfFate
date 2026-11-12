@@ -355,7 +355,7 @@ class Screen:
         self.text(label, x, y - (2 if s == 'A' else 0), size, col, align=1, w=w, h=h)
 
     def card(self, frame, x, y, w, h):
-        p = os.path.join(st.RES, frame + '.png')
+        p = st.art_png(frame)
         im = Image.open(p).convert('RGBA')
         if frame.startswith('anim/'):
             im = im.crop((0, 0, 360, 504))

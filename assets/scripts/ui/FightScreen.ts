@@ -169,7 +169,7 @@ export class FightScreen extends GameScreen {
         const stashTop = side.top - side.height + STASH_H;
         const list = buildHandList(root, run.board().hands, side.left, listTop, side.width, listTop - (stashTop + 4) - 22 - healthH - 22, { traces: true });
         this.entryFor.clear();
-        for (const e of list.entries) this.entryFor.set(e.hand.id, e);
+        for (const e of list.entries) for (const h of e.group ?? [e.hand]) this.entryFor.set(h.id, e);
         this.mine = buildHealthBlock(root, side.left, list.bottom - 22, side.width, this.view!.player);
         this.grids.player = this.mine.grid;
 
@@ -236,7 +236,7 @@ export class FightScreen extends GameScreen {
                 paintBadge(badge, f.progress(h), spent);
             }
             const entry = this.entryFor.get(h.hand.id);
-            if (entry) {
+            if (entry && !entry.group) {
                 this.paintPips(entry, h);
                 entry.trace?.set(spent ? 0 : f.progress(h), EFFECT_COLOR[h.hand.effect]);
                 if (spent) (entry.node.getComponent(UIOpacity) ?? entry.node.addComponent(UIOpacity)).opacity = 110;
@@ -244,8 +244,22 @@ export class FightScreen extends GameScreen {
         }
         // Their lines trace their cooldowns the same way.
         for (const h of f.enemy.hands) {
+            if (h.hand.source === 'leftover') continue;
             this.theirTrace.get(h.hand.id)?.set(h.charges <= 0 ? 0 : f.progress(h), EFFECT_COLOR[h.hand.effect]);
         }
+        // The high-card line follows its next card to fire, in that card's colour (decision 164).
+        this.refreshGroup(f.player.hands, (id) => this.entryFor.get(id)?.trace ?? null);
+        this.refreshGroup(f.enemy.hands, (id) => this.theirTrace.get(id) ?? null);
+    }
+
+    private refreshGroup(hands: readonly HandState[], traceOf: (id: string) => Trace | null) {
+        let best: HandState | null = null, trace: Trace | null = null;
+        for (const h of hands) {
+            if (h.hand.source !== 'leftover' || h.charges <= 0) continue;
+            trace = traceOf(h.hand.id) ?? trace;
+            if (!best || this.fight!.progress(h) > this.fight!.progress(best)) best = h;
+        }
+        if (trace && best) trace.set(this.fight!.progress(best), EFFECT_COLOR[best.hand.effect]);
     }
 
     private paintPips(entry: ListEntry, h: HandState) {

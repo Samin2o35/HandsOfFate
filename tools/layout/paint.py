@@ -16,6 +16,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 ROOT = os.getcwd()
 RES = os.path.join(ROOT, 'assets', 'resources')
+SRC = os.path.join(ROOT, 'art-source')  # the 4x originals since decision 169
 FONTS = os.path.join(ROOT, 'assets', 'fonts')
 
 
@@ -124,7 +125,9 @@ def main():
             src, sl = frames[fr]
             im = nine(src, w, h, sl) if sl else src.resize((w, h), Image.NEAREST)
         elif fr and not fr.startswith('kitC:'):
-            p = os.path.join(RES, fr + '.png')
+            p = os.path.join(SRC, fr + '.png')
+            if not os.path.exists(p):
+                p = os.path.join(RES, fr + '.png')
             if os.path.exists(p):
                 key = (fr, w, h)
                 if key not in cache:

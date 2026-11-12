@@ -1,7 +1,7 @@
 // The open-table pixel maps must match the tool that drew the signed-off mockups
 // (tools/art/make_mockups_c.py). Reference fingerprints made by that tool.
 import { describe, it, expect } from 'vitest';
-import { frame, cell, medallion, PAL, button, dottedRect, rewardHealth, rewardGrid, bar, flashOutline, fxPiece, FX_VARIANTS, FxKind, ellipse } from '../assets/scripts/ui/pixelart';
+import { frame, cell, PAL, button, dottedRect, rewardHealth, rewardGrid, bar, flashOutline, fxPiece, FX_VARIANTS, FxKind, bloodPool } from '../assets/scripts/ui/pixelart';
 
 const REF = {"open": "204x120:74a9ee0", "open2": "330x400:9a2160c5", "closed": "210x36:7fb10d85", "cell15": "17x17:9064559f", "cell21rot": "23x23:630b2921", "cell15shield": "17x17:e1140307", "cell15lost": "17x17:ab0fa2c0", "medEmpty": "36x36:86aadd25"};
 
@@ -16,9 +16,6 @@ describe('open-table pixel maps match the mockup tool', () => {
         expect(cell(21, 'rotted').hash()).toBe(REF.cell21rot);
         expect(cell(15, 'shield').hash()).toBe(REF.cell15shield);
         expect(cell(15, 'lost').hash()).toBe(REF.cell15lost);
-    });
-    it('the empty medallion', () => {
-        expect(medallion(0, false).hash()).toBe(REF.medEmpty);
     });
     it('buttons and rings stay inside the palette', () => {
         const allowed = new Set(Object.values(PAL).map((c) => c.join(',')));
@@ -79,10 +76,27 @@ describe('open-table pixel maps match the mockup tool', () => {
         // Splat variants differ from each other.
         expect(new Set([0, 1, 2, 3].map((v) => fxPiece('splat', v).hash())).size).toBe(4);
     });
-    it('the pool ellipse fills its middle and leaves its corners', () => {
-        const p = ellipse(60, 12);
-        expect(p.get(30, 6)[3]).toBe(255);
-        expect(p.get(0, 0)[3]).toBe(0);
-        expect(p.get(59, 11)[3]).toBe(0);
+    it("the King's pool stays in the palette, surrounds the card and is outlined in ink", () => {
+        const allowed = new Set(Object.values(PAL).map((c) => c.join(',')));
+        const { body, outline, rim, bottom, card } = bloodPool(400, 540, 240, 360, 5);
+        for (const pix of [body, outline]) for (let i = 0; i < pix.data.length; i += 4) {
+            if (pix.data[i + 3] === 0) continue;
+            expect(allowed.has([pix.data[i], pix.data[i + 1], pix.data[i + 2], 255].join(','))).toBe(true);
+        }
+        const at = (p: typeof body, x: number, y: number) => p.data[(y * p.w + x) * 4 + 3] > 0;
+        // Filled past every edge of the card.
+        const [cx, cy] = card;
+        expect(at(body, cx - 120 - 20, cy)).toBe(true);
+        expect(at(body, cx + 120 + 20, cy)).toBe(true);
+        expect(at(body, cx, cy - 180 - 20)).toBe(true);
+        expect(at(body, cx, cy + 180 + 30)).toBe(true);
+        // The outline covers every body pixel, and is wider by a pixel.
+        let bodyN = 0, outN = 0;
+        for (let i = 3; i < body.data.length; i += 4) { if (body.data[i]) { bodyN++; expect(outline.data[i]).toBeGreaterThan(0); } if (outline.data[i]) outN++; }
+        expect(outN).toBeGreaterThan(bodyN);
+        // Clear of the image's edges, so nothing is cut off.
+        for (let x = 0; x < 400; x++) { expect(at(outline, x, 0)).toBe(false); expect(at(outline, x, 539)).toBe(false); }
+        expect(rim.length).toBeGreaterThan(100);
+        expect(bottom[200]).toBeGreaterThan(cy + 180);
     });
 });

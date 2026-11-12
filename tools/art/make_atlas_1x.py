@@ -26,6 +26,8 @@ from PIL import Image
 
 ROOT = os.getcwd()
 RES = os.path.join(ROOT, 'assets', 'resources')
+# The 4x originals: art-source/ since decision 169 (outside assets), else the old place.
+SRC = os.path.join(ROOT, 'art-source') if os.path.isdir(os.path.join(ROOT, 'art-source', 'cards')) else RES
 W, H, GAP, COLS = 90, 126, 2, 12
 
 
@@ -40,9 +42,11 @@ def one_x(path):
 
 
 def meta_for(png, name):
-    """A texture import: nearest filter, clamp, no mipmaps, no alpha fixing. Keeps the uuid if the meta exists."""
+    """A texture import for a new image: nearest filter, clamp, no mipmaps, no alpha fixing. An existing meta is left as it is."""
     mp = png + '.meta'
-    u = json.load(open(mp))['uuid'] if os.path.exists(mp) else str(uuid.uuid4())
+    if os.path.exists(mp):
+        return  # Cocos owns it once imported: never rewrite (it would undo the editor's own fields)
+    u = str(uuid.uuid4())
     meta = {
         'ver': '1.0.27', 'importer': 'image', 'imported': False, 'uuid': u, 'files': ['.json', '.png'],
         'subMetas': {'6c48a': {
@@ -70,7 +74,7 @@ def main():
     # ---- Cards: both decks in one atlas ----
     paths = []
     for deck in ('updated', 'classic'):
-        d = os.path.join(RES, 'cards', deck)
+        d = os.path.join(SRC, 'cards', deck)
         for f in sorted(os.listdir(d)):
             if f.endswith('.png'):
                 paths.append(f'cards/{deck}/{f[:-4]}')
@@ -79,7 +83,7 @@ def main():
     atlas = Image.new('RGBA', (aw, ah), (0, 0, 0, 0))
     rects = {}
     for k, p in enumerate(paths):
-        im = one_x(os.path.join(RES, p + '.png'))
+        im = one_x(os.path.join(SRC, p + '.png'))
         if im.size != (W, H):
             sys.exit(f'{p}: {im.size} at 1x, expected {W}x{H}')
         x, y = GAP + (k % COLS) * (W + GAP), GAP + (k // COLS) * (H + GAP)
@@ -104,7 +108,7 @@ def main():
         f.write('\n'.join(ts))
 
     # ---- Animated strips at 1x ----
-    src = os.path.join(RES, 'anim')
+    src = os.path.join(SRC, 'anim')
     out = os.path.join(RES, 'anim1x')
     os.makedirs(out, exist_ok=True)
     folder_meta(out)

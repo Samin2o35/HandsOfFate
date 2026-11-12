@@ -135,6 +135,10 @@ export class ScreenManager extends Component {
         const root = this.screenRoot ?? this.node;
         if (this.current?.isValid) {
             if (!alreadyHidden) this.current.getComponent(GameScreen)?.onHide();
+            // Keep the effect pieces for the next screen, and stop every tween left on this
+            // one (endless loops included) so nothing outlives it (decision 165).
+            Particles.parkAll();
+            stopTweensUnder(this.current);
             this.current.destroy();
         }
         this.current = null;
@@ -186,4 +190,11 @@ function bossSuitFor(name: string, params: unknown): Suit | null {
     if (name !== 'BossIntro' && name !== 'Planning' && name !== 'Fight') return null;
     const run = (params as { run?: Run } | undefined)?.run ?? Game.run;
     return run?.isBoss ? run.opponent.boss?.suit ?? null : null;
+}
+
+/** Stops the tweens on a node, its components and everything under it. */
+function stopTweensUnder(n: Node) {
+    Tween.stopAllByTarget(n);
+    for (const c of n.components) Tween.stopAllByTarget(c);
+    for (const ch of n.children) stopTweensUnder(ch);
 }

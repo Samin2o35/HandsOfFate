@@ -157,7 +157,7 @@ class Mock:
             d.rectangle([x, y, x + s - 1, y + s - 1], fill=col)
 
     def art(self, frame, x, y, w, h):
-        p = os.path.join(RES, frame + '.png')
+        p = st.art_png(frame)
         if not os.path.exists(p):
             return
         im = Image.open(p).convert('RGBA')

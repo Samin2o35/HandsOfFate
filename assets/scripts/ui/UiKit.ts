@@ -12,7 +12,7 @@ import {
     Button, resources, Vec3, HorizontalTextAlignment, VerticalTextAlignment, Texture2D, Rect, Size, Vec2,
 } from 'cc';
 import { Sound } from '../app/Sound';
-import { Card, RANKS, SUITS, Suit, updatedArtPath, classicArtPath, CARD_BACK_PATH, DEALER_CARD_PATH } from '../core/cards';
+import { Card, SUITS, Suit, updatedArtPath, classicArtPath, CARD_BACK_PATH, DEALER_CARD_PATH } from '../core/cards';
 import { UiButton, ButtonStyle } from './UiButton';
 import { whiteFrame } from './kitC';
 import { CARD_ATLAS, CARD_ATLAS_W, CARD_ATLAS_H, CARD_RECTS } from './cardAtlas';
@@ -92,10 +92,9 @@ export class UiKit extends Component {
         const cards = new Promise<void>((resolve) => {
             resources.load(`${CARD_ATLAS}/texture`, Texture2D, (err, tex) => {
                 if (err || !tex) {
-                    console.warn('Card atlas missing: loading every card file instead (run tools/art/make_atlas_1x.py).', err);
-                    const paths: string[] = [];
-                    for (const suit of SUITS) for (const rank of RANKS) paths.push(updatedArtPath({ suit, rank }), classicArtPath({ suit, rank }));
-                    Promise.all(paths.concat([CARD_BACK_PATH, DEALER_CARD_PATH]).map(one)).then(() => resolve());
+                    // The atlas is the only card art in the game since decision 169.
+                    console.error('Card atlas missing: run npm run atlas (tools/art/make_atlas_1x.py).', err);
+                    resolve();
                     return;
                 }
                 tex.setFilters(Texture2D.Filter.NEAREST, Texture2D.Filter.NEAREST);

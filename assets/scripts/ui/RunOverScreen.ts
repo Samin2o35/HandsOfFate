@@ -63,12 +63,15 @@ export class RunOverScreen extends GameScreen {
 
         // Landscape: the fallen King on the left, the stats on the right.
         const artW = 480;
-        const art = makeSprite(root, 'Fallen', kit.frame('concept/king_fallen_1x'), artW, 720, { x: L0 + 40 + artW / 2, y: 0 });
+        // He lies in a pool of blood reaching 160 px past his sides (decision 173), so he sits
+        // further in from the edge and further from the stats than before.
+        const artX = L0 + 130 + artW / 2;
+        const art = makeSprite(root, 'Fallen', kit.frame('concept/king_fallen_1x'), artW, 720, { x: artX, y: 0 });
         art.node.setScale(1.08, 1.08, 1);
         tween(art.node).to(0.5, { scale: new Vec3(1, 1, 1) }, { easing: 'quadOut' }).start();
-        // Blood runs down the card's edges and pools beneath it, looping slowly (Stage E, decision 162).
+        // The pool behind him, always bleeding (decision 173).
         RunOverBlood.attach(root, art.node, artW, 720);
-        const L = L0 + 40 + artW + 80;
+        const L = artX + artW / 2 + 190;
         const innerW = R - L;
         const cx = L + innerW / 2;
 

@@ -11,6 +11,9 @@ import { ANIM_FRAMES } from '../core/cards';
 const { ccclass, property, requireComponent } = _decorator;
 
 
+/** Frames of each loaded strip, cut once (decision 165). */
+const STRIP_FRAMES = new Map<string, SpriteFrame[]>();
+
 @ccclass('AnimatedCard')
 @requireComponent(Sprite)
 export class AnimatedCard extends Component {
@@ -35,34 +38,31 @@ export class AnimatedCard extends Component {
     load(strip: string) {
         this.strip = strip;
         // The 1x copy of the strip (anim/X → anim1x/X, tools/art/make_atlas_1x.py): the same pixels at
-        // every size the game draws, a sixteenth of the memory. Falls back to the 4x file.
-        const small = strip.startsWith('anim/') ? `anim1x/${strip.slice(5)}` : '';
-        const use = (tex: Texture2D) => {
-            if (this.strip !== strip) return; // a newer load() replaced this one
-            tex.setFilters(Texture2D.Filter.NEAREST, Texture2D.Filter.NEAREST);
-            const fw = Math.round(tex.width / ANIM_FRAMES), fh = tex.height;
-            this.frames = [];
-            for (let i = 0; i < ANIM_FRAMES; i++) {
-                const frame = new SpriteFrame();
-                frame.reset({
-                    texture: tex,
-                    rect: new Rect(i * fw, 0, fw, fh),
-                    originalSize: new Size(fw, fh),
-                    offset: new Vec2(0, 0),
-                    isRotate: false,
-                });
-                this.frames.push(frame);
-            }
+        // every size the game draws. The 4x originals are not in the game since decision 169.
+        const small = strip.startsWith('anim/') ? `anim1x/${strip.slice(5)}` : strip;
+        const ready = (frames: SpriteFrame[]) => {
+            if (this.strip !== strip || !this.isValid) return; // a newer load() replaced this one
+            this.frames = frames;
             this.loadedStrip = strip;
             this.time = this.randomStart ? Math.random() * ANIM_FRAMES / this.fps : 0;
             this.showFrame();
         };
-        const big = () => resources.load(`${strip}/texture`, Texture2D, (err, tex) => {
-            if (err || !tex) { console.error(`Missing animation strip: ${strip}`, err); return; }
-            use(tex);
+        // Cut once per strip and shared by every card showing it, so no frames pile up (decision 165).
+        const cut = STRIP_FRAMES.get(small);
+        if (cut) { ready(cut); return; }
+        resources.load(`${small}/texture`, Texture2D, (err, tex) => {
+            if (err || !tex) { console.error(`Missing animation strip: ${small}`, err); return; }
+            tex.setFilters(Texture2D.Filter.NEAREST, Texture2D.Filter.NEAREST);
+            const fw = Math.round(tex.width / ANIM_FRAMES), fh = tex.height;
+            const frames: SpriteFrame[] = [];
+            for (let i = 0; i < ANIM_FRAMES; i++) {
+                const frame = new SpriteFrame();
+                frame.reset({ texture: tex, rect: new Rect(i * fw, 0, fw, fh), originalSize: new Size(fw, fh), offset: new Vec2(0, 0), isRotate: false });
+                frames.push(frame);
+            }
+            STRIP_FRAMES.set(small, frames);
+            ready(frames);
         });
-        if (!small) { big(); return; }
-        resources.load(`${small}/texture`, Texture2D, (err, tex) => { if (err || !tex) big(); else use(tex); });
     }
 
     update(dt: number) {

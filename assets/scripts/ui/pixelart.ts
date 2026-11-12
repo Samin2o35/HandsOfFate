@@ -8,7 +8,8 @@
 //             dotted, then double, with a gap for a caption
 //   stock     a card blank with the deck's clipped corners
 //   cell      a health cell: flat colour, ink outline, the pips' rounded corners
-//   dots      the medallion's 12 timer dots
+//   rings     the medallion's charging ring (traceRing)
+//   fx        white impact pieces and flame discs, tinted in code
 //   dotted    dotted rings and rules
 
 export type RGBA = readonly [number, number, number, number];
@@ -181,23 +182,6 @@ export function cell(n: number, state: CellState = 'alive'): Pix {
             if (x > 0 && x < n - 1 && y > 0 && y < n - 1) p.set(x, y, PAL.greenLo);
         }
     }
-    return p;
-}
-
-/**
- * The medallion around a badge's suit pip (36x36): 12 dots on a circle, `lit` of
- * them cream (the timer), the rest room dark. suit = false draws the empty-line dash.
- */
-export function medallion(lit: number, suit = true): Pix {
-    const s = 36, c = (s - 1) / 2;
-    const p = new Pix(s, s);
-    for (let i = 0; i < 12; i++) {
-        const a = -Math.PI / 2 + (i * Math.PI) / 6;
-        const x = Math.round(c + Math.cos(a) * 16.6), y = Math.round(c + Math.sin(a) * 16.6);
-        const col = suit && i < lit ? PAL.cream : PAL.room1;
-        for (const dx of [0, 1]) for (const dy of [0, 1]) p.set(x + dx - 1, y + dy - 1, col);
-    }
-    if (!suit) for (let x = 14; x < 22; x++) { p.set(x, 17, PAL.cream); p.set(x, 18, PAL.cream); }
     return p;
 }
 
@@ -429,12 +413,126 @@ export function fxPiece(kind: FxKind, variant: number): Pix {
     }
 }
 
-/** A flat ellipse w x h (the blood pool), white. */
-export function ellipse(w: number, h: number): Pix {
-    const p = new Pix(w, h), cx = (w - 1) / 2, cy = (h - 1) / 2;
-    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-        const dx = (x - cx) / (w / 2), dy = (y - cy) / (h / 2);
-        if (dx * dx + dy * dy <= 1) p.set(x, y, W1);
+/** A white filled disc of radius r (art px), for the flame's blobs (decision 167). */
+export function disc(r: number): Pix {
+    const s = r * 2 + 1, p = new Pix(s, s);
+    for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) {
+        if ((x - r) * (x - r) + (y - r) * (y - r) <= r * r + r * 0.6) p.set(x, y, W1);
     }
     return p;
+}
+
+/**
+ * The pool of blood the fallen King lies in (decision 173), w x h art px, drawn once. It
+ * surrounds a card of cardW x cardH art px whose centre sits `up` art px above the pool's
+ * centre, and reaches out past every edge like the boss's fire, furthest below (it ran down).
+ * Two images, so seeping blobs can merge with it: `body` (palette reds, darker pooled patches,
+ * a darker rim, pink glints) and `outline` (the shape grown by one pixel, in ink).
+ * Also returns `rim`: points on its edge with an outward direction, and `bottom[x]`: the
+ * lowest filled row of each column (-1 if none), for blood running down to the edge.
+ */
+export function bloodPool(w: number, h: number, cardW: number, cardH: number, up: number, seed = 11): {
+    body: Pix; outline: Pix; rim: [number, number, number, number][]; bottom: number[]; card: [number, number];
+} {
+    const rnd = seeded(seed);
+    const mask = new Uint8Array(w * h);
+    const ccx = w / 2, ccy = h / 2 - up;
+    const hw = cardW / 2, hh = cardH / 2;
+    const disc = (cx: number, cy: number, r: number) => {
+        for (let y = Math.max(2, Math.floor(cy - r)); y <= Math.min(h - 3, Math.ceil(cy + r)); y++)
+            for (let x = Math.max(2, Math.floor(cx - r)); x <= Math.min(w - 3, Math.ceil(cx + r)); x++)
+                if ((x - cx) * (x - cx) + (y - cy) * (y - cy) <= r * r) mask[y * w + x] = 1;
+    };
+    // How far the pool reaches past the card, by direction: a few slow waves, more below.
+    const waves = Array.from({ length: 5 }, (_, i) => ({ k: i + 2, ph: rnd() * Math.PI * 2, a: 0.5 + rnd() * 0.5 }));
+    const room = Math.min((w - cardW) / 2, (h - cardH) / 2 - Math.abs(up)) - 4;
+    const reach = (a: number) => {
+        let v = 0;
+        for (const q of waves) v += Math.sin(a * q.k + q.ph) * q.a;
+        const down = Math.max(0, Math.sin(a));
+        return room * (0.5 + v * 0.13 + down * 0.25);
+    };
+    for (let y = 2; y < h - 2; y++) for (let x = 2; x < w - 2; x++) {
+        // Distance from a smaller box inside the card, so the pool's corners come out round.
+        const dx = Math.max(0, Math.abs(x - ccx) - (hw - 50)), dy = Math.max(0, Math.abs(y - ccy) - (hh - 50));
+        const d = Math.hypot(dx, dy) - 50;
+        if (d <= reach(Math.atan2(y - ccy, x - ccx))) mask[y * w + x] = 1;
+    }
+    // A lumpy edge: lobes pushed out along the rim, and little satellite pools beyond it.
+    const edgeAt = (a: number) => {
+        const ex = Math.cos(a), ey = Math.sin(a);
+        // Walk outward from the card centre to the edge of the pool.
+        let t = 0;
+        while (t < w + h) {
+            const x = Math.round(ccx + ex * t), y = Math.round(ccy + ey * t);
+            if (x < 0 || y < 0 || x >= w || y >= h || !mask[y * w + x]) break;
+            t += 1;
+        }
+        return [ccx + ex * t, ccy + ey * t];
+    };
+    for (let i = 0; i < 26; i++) {
+        const a = (i / 26) * Math.PI * 2 + rnd() * 0.2;
+        const [ex, ey] = edgeAt(a);
+        disc(ex, ey, room * (0.08 + rnd() * 0.16));
+    }
+    // A few tongues that ran further, mostly downward.
+    for (let i = 0; i < 6; i++) {
+        const a = Math.PI / 2 + (rnd() - 0.5) * 2.6;
+        let [ex, ey] = edgeAt(a), r = room * (0.1 + rnd() * 0.06);
+        const len = room * (0.15 + rnd() * 0.3);
+        for (let t = 0; t < len; t += 1.5) { disc(ex + Math.cos(a) * t, ey + Math.sin(a) * t, r); r = Math.max(2, r * 0.985); }
+        disc(ex + Math.cos(a) * len, ey + Math.sin(a) * len, r + 1.5);
+    }
+    for (let i = 0; i < 18; i++) {
+        const a = rnd() * Math.PI * 2;
+        const [ex, ey] = edgeAt(a);
+        const out = 3 + rnd() * room * 0.25;
+        disc(ex + Math.cos(a) * out, ey + Math.sin(a) * out, 1 + rnd() * 2.2);
+    }
+    const filled = (x: number, y: number) => x >= 0 && y >= 0 && x < w && y < h && mask[y * w + x] === 1;
+    // Colour: red, darker pooled patches (coarse value noise), a darker band just inside the rim,
+    // and short pink glints where the light catches it (outside the card, where they show).
+    const g = 8, gw = Math.ceil(w / g) + 2, grid = Array.from({ length: gw * (Math.ceil(h / g) + 2) }, () => rnd());
+    const noise = (x: number, y: number) => {
+        const gx = x / g, gy = y / g, ix = Math.floor(gx), iy = Math.floor(gy), fx = gx - ix, fy = gy - iy;
+        const v = (a: number, b: number) => grid[b * gw + a];
+        const top = v(ix, iy) * (1 - fx) + v(ix + 1, iy) * fx, bot = v(ix, iy + 1) * (1 - fx) + v(ix + 1, iy + 1) * fx;
+        return top * (1 - fy) + bot * fy;
+    };
+    const body = new Pix(w, h), outline = new Pix(w, h);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+        if (filled(x, y)) {
+            const edge = !(filled(x - 2, y) && filled(x + 2, y) && filled(x, y - 2) && filled(x, y + 2));
+            // His shadow: the blood is thickest and darkest right against him.
+            const near = Math.max(Math.abs(x - ccx) - hw, Math.abs(y - ccy) - hh) < 2 + noise(x * 2.3 + 40, y * 2.3) * 16;
+            body.set(x, y, edge || near || noise(x, y) > 0.74 ? PAL.redLo : PAL.red);
+            outline.set(x, y, PAL.ink);
+        } else if (filled(x - 1, y) || filled(x + 1, y) || filled(x, y - 1) || filled(x, y + 1)) {
+            outline.set(x, y, PAL.ink);
+        }
+    }
+    const inCard = (x: number, y: number) => Math.abs(x - ccx) <= hw && Math.abs(y - ccy) <= hh;
+    for (let i = 0, made = 0; i < 900 && made < 34; i++) {
+        const x = Math.floor(rnd() * w), y = Math.floor(rnd() * h), len = 3 + Math.floor(rnd() * 6);
+        let ok = !inCard(x, y) && !inCard(x + len, y);
+        for (let k = -3; k <= len + 3 && ok; k++) ok = filled(x + k, y) && filled(x + k, y - 3) && filled(x + k, y + 3);
+        if (!ok) continue;
+        for (let k = 0; k < len; k++) body.set(x + k, y, PAL.redHi);
+        if (rnd() < 0.5) body.set(x + 1, y - 1, PAL.redHi);
+        made++;
+    }
+    // Rim points (every few pixels round the edge) with the outward direction from the card.
+    const rim: [number, number, number, number][] = [];
+    for (let y = 0; y < h; y += 3) for (let x = (y * 7) % 3; x < w; x += 3) {
+        if (!filled(x, y) || (filled(x - 1, y) && filled(x + 1, y) && filled(x, y - 1) && filled(x, y + 1))) continue;
+        const dx = x - ccx, dy = y - ccy, n = Math.hypot(dx, dy) || 1;
+        rim.push([x, y, dx / n, dy / n]);
+    }
+    const bottom: number[] = [];
+    for (let x = 0; x < w; x++) {
+        let b = -1;
+        for (let y = h - 1; y >= 0; y--) if (filled(x, y)) { b = y; break; }
+        bottom.push(b);
+    }
+    return { body, outline, rim, bottom, card: [ccx, ccy] };
 }

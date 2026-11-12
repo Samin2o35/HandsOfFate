@@ -10,6 +10,15 @@ from PIL import Image, ImageDraw, ImageFont
 
 ROOT = os.getcwd()
 RES = os.path.join(ROOT, 'assets', 'resources')
+# The 4x Pixel Plebes originals live outside assets since decision 169, so Cocos doesn't import
+# them and builds don't carry them; the game uses the 1x atlas and strips made from them.
+SRC = os.path.join(ROOT, 'art-source')
+
+
+def art_png(p):
+    """The PNG for a resources-style path ('cards/updated/S_13'): the original if moved, else under resources."""
+    a = os.path.join(SRC, p + '.png')
+    return a if os.path.exists(a) else os.path.join(RES, p + '.png')
 FONTS = os.path.join(ROOT, 'assets', 'fonts')
 
 
@@ -61,5 +70,5 @@ def pip(suit):
 
 def card(strip, frame=0):
     """One frame of an animated card at 1x (90x126): the 4x strip cut and quartered exactly."""
-    im = Image.open(os.path.join(RES, strip + '.png')).convert('RGBA')
+    im = Image.open(art_png(strip)).convert('RGBA')
     return im.crop((frame * 360, 0, frame * 360 + 360, 504)).resize((90, 126), Image.NEAREST)

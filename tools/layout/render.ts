@@ -114,6 +114,8 @@ async function main() {
             const run = a1 === 'tut' ? Run.newRun({ seed: 51, tutorial: true } as any) : sampleRun(Number(a2 ?? 5), a1 === 'boss' ? { suit: 'H', tier: 2 } : undefined);
             if (a1 && a1 !== 'tut' && a1 !== 'boss') fill(run, Number(a1));
             if (process.env.FILL) fill(run, Number(process.env.FILL)); // e.g. FILL=5 with "boss 10"
+            // BOARD="5H 9S JS / 3D KC 9H / 8C 2S 10C" puts exactly that board on your table.
+            if (process.env.BOARD) { const g = grid.gridFromText(process.env.BOARD); let id = 7000; for (const c of g.slots) if (c) (c as any).id = id++; run.data.grid = g; }
             if (process.env.SPEED) (Game as any).settings.speed = process.env.SPEED;
             if (a1 === 'tut' && Number(a2) >= 3) fill(run, 3);
             // STASH=n adds n more cards to the stash (copies of board cards); PAIRS=1 adds a second forgeable pair.
@@ -155,7 +157,7 @@ async function main() {
             await new Promise((r) => setTimeout(r, 20));
             for (let i = 0; i < Number(process.env.FRAMES) && !comp.ending; i++) { Particles.tick(1 / 60); comp.update(1 / 60); }
         }
-        if (process.env.FRAMES && screen === 'RunOver') {
+        if (process.env.FRAMES && (screen === 'RunOver' || screen === 'BossIntro')) {
             // Run the screen's own animations (the blood) for a while, for mockups.
             await new Promise((r) => setTimeout(r, 60));
             // The King's drop-in tween doesn't run here: settle him.

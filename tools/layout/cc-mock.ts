@@ -56,7 +56,8 @@ export class Node {
     constructor(public name = '') {}
     addChild(n: Node) { n.parent = this; this.children.push(n); work.nodes++; }
     removeFromParent() { if (this.parent) this.parent.children = this.parent.children.filter((c) => c !== this); this.parent = null; }
-    destroy() { this.isValid = false; this.removeFromParent(); work.destroyed++; return true; }
+    // Like the engine: the whole subtree goes invalid, and each component's onDestroy runs.
+    destroy() { const kill = (n: Node) => { n.isValid = false; for (const c of n.components) (c as any).onDestroy?.(); n.children.forEach(kill); }; kill(this); this.removeFromParent(); work.destroyed++; return true; }
     setParent(p: Node) { this.removeFromParent(); p.addChild(this); }
     setPosition(x: any, y?: number, z?: number) { if (typeof x === 'object') this.position = new Vec3(x.x, x.y, x.z ?? 0); else this.position = new Vec3(x, y ?? 0, z ?? 0); }
     getPosition() { return this.position.clone(); }
@@ -275,13 +276,13 @@ export const sys = {
     localStorage: { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v), removeItem: (k: string) => void store.delete(k) },
     isNative: false, isMobile: false, os: 'web', OS: { ANDROID: 'Android', IOS: 'iOS' }, platform: 'web',
 };
-export const game = { end() {}, frameRate: 60 };
+export const game = { end() {}, frameRate: 60, get totalTime() { return performance.now(); } };
 export const director = { getScene: () => null, getTotalTime: () => 0, getDeltaTime: () => 1 / 60, once(_e: string, fn: () => void) { fn(); } };
 export const Director = { EVENT_BEFORE_DRAW: 'director_before_draw' };
 export const screen = { windowSize: new Size(1920, 1080), on() {}, off() {} };
 export const view = { setDesignResolutionSize() {}, getVisibleSize: () => new Size(1920, 1080), on() {}, off() {} };
 export const ResolutionPolicy = { FIXED_WIDTH: 0, FIXED_HEIGHT: 1, SHOW_ALL: 2 };
-export const dynamicAtlasManager = { enabled: false };
+export const DynamicAtlasManager = { instance: { enabled: false } };
 /** Paths asked of resources.load that have no file under assets/resources (render.ts fails on any). */
 export const missingResources = new Set<string>();
 // eslint-disable-next-line @typescript-eslint/no-var-requires

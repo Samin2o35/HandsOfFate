@@ -63,6 +63,8 @@ function flushPages() {
 
 /** Shared pages in use (for the perf tool and tests). */
 export function atlasPages(): number { return pages.length; }
+/** Frames made and kept so far (the layout tool's run-after-run check). */
+export function cachedFrames(): number { return cache.size; }
 
 function toFrame(p: px.Pix, key: string, slice = 0): SpriteFrame {
     const hit = cache.get(key);
@@ -189,12 +191,6 @@ export function cellSpriteSize(size: number): number {
     return (Math.max(6, Math.round(size / 2)) + 2) * 2;
 }
 
-/** The medallion's 12 dots: `lit` of them cream. suit = false for a line with no hand. */
-export function medallionFrame(lit: number, suit = true): SpriteFrame {
-    const l = Math.max(0, Math.min(12, Math.round(lit)));
-    return toFrame(px.medallion(l, suit), `med:${suit ? l : 'none'}`);
-}
-
 /** Palette colours by hex, for frames tinted per suit or effect. */
 function palOf(hexColor: string): px.RGBA {
     const h = hexColor.replace('#', '').toLowerCase();
@@ -247,8 +243,24 @@ export function fxAny(kind: px.FxKind): { frame: SpriteFrame; w: number; h: numb
     return fxFrame(kind, Math.floor(Math.random() * px.FX_VARIANTS[kind]));
 }
 
-/** A white flat ellipse w x h screen pixels (the blood pool). */
-export function ellipseFrame(w: number, h: number): SpriteFrame {
-    const aw = art(w), ah = art(h);
-    return toFrame(px.ellipse(aw, ah), `ell:${aw}x${ah}`);
+/**
+ * A white disc of radius r flame pixels, each flame pixel 4 screen px (two art px), so the
+ * flame has the chunky blocks of its reference (decision 167). Returns the frame and its size.
+ */
+export function flameDiscFrame(r: number): { frame: SpriteFrame; size: number } {
+    const p = px.disc(r).scaled(2);
+    return { frame: toFrame(p, `fdisc:${r}`), size: p.w * 2 };
+}
+
+/** A white disc of radius r art px (2 screen px each), for the run-over blood blobs (decision 171). */
+export function bloodDiscFrame(r: number): { frame: SpriteFrame; size: number } {
+    const p = px.disc(Math.max(1, r));
+    return { frame: toFrame(p, `bdisc:${Math.max(1, r)}`), size: p.w * 2 };
+}
+
+/** The pool the fallen King lies in (decision 173): its body and ink outline frames, and its edges. */
+export function bloodPoolFrames(w: number, h: number, cardW: number, cardH: number, up: number) {
+    const p = px.bloodPool(w, h, cardW, cardH, up);
+    const key = `bpool:${w}x${h}:${cardW}x${cardH}:${up}`;
+    return { body: toFrame(p.body, key), outline: toFrame(p.outline, `${key}:o`), rim: p.rim, bottom: p.bottom };
 }

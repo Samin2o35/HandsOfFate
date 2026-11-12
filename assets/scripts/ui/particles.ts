@@ -148,10 +148,42 @@ function give(p: Piece) {
 
 @ccclass('HoFParticles')
 export class Particles extends Component {
+    /** A hidden node under the Canvas that keeps the pieces between screens (decision 165). */
+    private static park: Node | null = null;
+
+    onLoad() {
+        const n = new Node('ParkedFx');
+        n.layer = this.node.layer;
+        this.node.addChild(n);
+        n.active = false;
+        Particles.park = n;
+    }
+
     update(dt: number) { Particles.tick(dt); }
+
+    /**
+     * Before a screen is destroyed (ScreenManager): every piece, live or waiting, moves to the
+     * parked node instead of being destroyed with the screen, and the live ones stop. The next
+     * screen reuses them, so a run no longer makes and destroys thousands of nodes.
+     */
+    static parkAll() {
+        const park = Particles.park;
+        if (!park?.isValid) return;
+        const keep = (n: Node) => { if (n.isValid && n.parent !== park) n.setParent(park); };
+        for (const d of dots) { keep(d.node); pool.push(d); }
+        for (const s of shots) { if (s.piece) { keep(s.piece.node); pool.push(s.piece); } if (s.head) { keep(s.head.node); pool.push(s.head); } }
+        for (const p of pool) keep(p.node);
+        for (const n of nums) { n.holder.active = false; numberPool.push(n); }
+        for (const n of numberPool) keep(n.holder);
+        dots.length = 0; shots.length = 0; nums.length = 0;
+        // Only the pieces themselves (not dots' extra state) go back to the pool.
+        for (let i = 0; i < pool.length; i++) { const q = pool[i]; pool[i] = { node: q.node, sprite: q.sprite, op: q.op, ut: q.ut }; }
+    }
 
     /** Live pieces right now (dots, shots, numbers). */
     static get live(): number { return dots.length + shots.length + nums.length; }
+    /** Pieces waiting in the pool (the layout tool's run-after-run check). */
+    static get pooled(): number { return pool.length + numberPool.length; }
 
     static dot(layer: Node, o: DotOptions): void {
         if (!layer.isValid) return;

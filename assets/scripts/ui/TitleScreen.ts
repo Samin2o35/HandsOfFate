@@ -19,15 +19,19 @@ import { UiButton, ButtonStyle } from './UiButton';
 import { Game } from '../app/Game';
 import { ScreenManager } from '../app/ScreenManager';
 import { confirmBox } from './Modal';
-import { makeLabel, FONT } from './UiKit';
+import { makeLabel, FONT, UiKit } from './UiKit';
+import { DEALER_CARD_PATH } from '../core/cards';
 import { frame, rule, INK_TEXT } from './kitC';
 import { AnimatedCard } from './AnimatedCard';
 
 /** The title fan, left to right: strip and lift (px) of each card (mockup 01). Joker in the middle. */
-const FAN: [string, string, number][] = [
-    ['KSpades', 'anim/S_13', 28], ['QHearts', 'anim/H_12', 12], ['Joker', 'anim/joker_true', 0],
-    ['JClubs', 'anim/C_11', 12], ['AHearts', 'anim/D_14', 28],
+const FAN: [string, string][] = [
+    ['KSpades', 'anim/S_13'], ['QHearts', 'anim/H_12'], ['Joker', 'anim/joker_true'],
+    ['JClubs', 'anim/C_11'], ['AHearts', 'anim/D_14'],
 ];
+/** The fan's arc (decision 166): each card sits on a circle of this radius, turned to it. */
+const FAN_RADIUS = 1030;
+const FAN_STEP = 7; // degrees between cards: −14, −7, 0, 7, 14 from the Joker
 const { ccclass, property } = _decorator;
 
 @ccclass('TitleScreen')
@@ -82,20 +86,30 @@ export class TitleScreen extends GameScreen {
         const fan = content.getChildByName('Fan');
         if (fan) {
             fan.setPosition(-480, 250);
-            FAN.forEach(([name, strip, lift], k) => {
+            FAN.forEach(([name, strip], k) => {
                 const card = fan.getChildByName(name);
                 if (!card) return;
-                card.setPosition(-250 + k * 125, -6 - lift);
+                // On one arc, symmetric about the Joker: the prefab's own angles were for an
+                // older order (the Joker turned, the end card upright), so set them here.
+                const deg = (k - 2) * FAN_STEP, rad = deg * Math.PI / 180;
+                card.setPosition(Math.round(FAN_RADIUS * Math.sin(rad)), Math.round(-6 - FAN_RADIUS * (1 - Math.cos(rad))));
+                card.angle = -deg;
                 card.getComponent(UITransform)?.setContentSize(180, 252);
                 card.setSiblingIndex(k);
+                // Its first frame from the card atlas at once (the prefab holds none since decision
+                // 169), then the animation from its strip.
+                const still = UiKit.get()?.frame(strip === 'anim/joker_true' ? DEALER_CARD_PATH : `cards/updated/${strip.slice(5)}`);
+                const sprite = card.getComponent(Sprite);
+                if (sprite && still && !sprite.spriteFrame) sprite.spriteFrame = still;
                 const anim = card.getComponent(AnimatedCard);
                 if (anim && anim.strip !== strip) anim.load(strip);
             });
         }
-        // Buttons in the signed-off order and words (mockup 01): Continue, New Run, How to play, Aces, Options, Quit.
+        // Buttons in the signed-off order (mockup 01): Continue, New Run, How to play, Achievements, Options, Quit.
+        // Samin asked for "Achievements" rather than mockup 01's "Aces" (decision 166).
         const order: [UiButton | null, string][] = [
             [this.continueButton, ''], [this.newRunButton, 'New Run'], [this.howToPlayButton, 'How to play'],
-            [this.achievementsButton, 'Aces'], [this.optionsButton, 'Options'], [this.quitButton, 'Quit'],
+            [this.achievementsButton, 'Achievements'], [this.optionsButton, 'Options'], [this.quitButton, 'Quit'],
         ];
         order.forEach(([b, text], k) => {
             if (!b) return;

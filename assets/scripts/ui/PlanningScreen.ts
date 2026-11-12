@@ -23,7 +23,7 @@ import { BoardView, worldRect, unionRects } from './BoardView';
 import { ForgeView } from './ForgeView';
 import { showTheirTable } from './TheirTable';
 import { cardWords } from './views';
-import { finishRound, PlanningMessage } from './flow';
+import { PlanningMessage } from './flow';
 import { tutorialStep, setTutorialStep, finishTutorial, showTutorial, suitLegend } from './Tutorial';
 import { jokerLine, Moment } from './joker';
 import {
@@ -280,10 +280,6 @@ export class PlanningScreen extends GameScreen {
         const run = this.run!;
         this.drawer = null;
         Game.saveRun();
-        if (ScreenManager.show('Fight', { run })) return;
-        // No fight screen in ScreenManager: play the round instantly.
-        const fight = run.startFight();
-        fight.runToEnd();
-        finishRound(run, fight);
+        ScreenManager.show('Fight', { run });
     }
 }

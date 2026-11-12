@@ -9,7 +9,7 @@ import { Sound } from '../app/Sound';
 import { ACES, AceId } from '../core/achievements';
 import { UiKit, makeNode, makeSprite, makeLabel, makeButton, FONT } from './UiKit';
 import { frame, ringFrame, INK_TEXT } from './kitC';
-import { Aura } from '../app/Aura';
+import { Flame } from './flame';
 import { ButtonStyle } from './UiButton';
 import { sparks, FX_COLOR } from './fx';
 import { jokerLine } from './joker';
@@ -51,9 +51,9 @@ export function celebrateAce(host: Node, id: AceId, onClose?: () => void): Node 
 
     // Landscape: banner on top, the card on the left, its name and the button on the right.
     makeLabel(layer, 'Banner', 'ACE EARNED', { size: FONT.title, spacing: 5, color: INK_TEXT.gold, y: 380 });
-    // The card at 2× with a dotted gold ring, in a gold aura of the background's smoke (decision 163).
+    // The card at 2× with a dotted gold ring, a gold fire burning behind it (decision 167).
     const holder = makeNode(layer, 'Card', 200, 280, { x: -420, y: -10 });
-    Aura.attach(holder, 'Aura', 204, 276, {}, INK_TEXT.gold, { above: 150, side: 80, below: 50 });
+    Flame.attach(holder, 'Flame', 180, 252, {}, 'gold');
     makeSprite(holder, 'Ace', kit.classicFrame({ suit: ace.suit, rank: 14 }), 180, 252);
     makeSprite(holder, 'Ring', ringFrame(204, 276, 'gold'), 204, 276);
     holder.setScale(0.2, 0.2, 1);
