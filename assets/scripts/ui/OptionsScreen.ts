@@ -140,7 +140,8 @@ export class OptionsScreen extends GameScreen {
         });
 
         // Credits and Back along the bottom.
-        makeLabel(root, 'Credits', 'Card art: Pixel Plebes by Greebles (Devlyn JD) · Fonts: Pixelify Sans, VT323 (OFL)', { font: 'body', size: 26, color: INK_TEXT.quiet, y: B + 170, width: colW * 2 + colGap, height: 40 });
+        makeLabel(root, 'Credits', 'Card art: Pixel Plebes by Greebles (Devlyn JD) · Fonts: Pixelify Sans, VT323 (OFL)', { font: 'body', size: 26, color: INK_TEXT.quiet, y: B + 206, width: colW * 2 + colGap, height: 40 });
+        makeLabel(root, 'CreditsAudio', 'Music: Pegonthetrack & ElvGames · Sounds: Leohpaz, JDSherbert, beatscribe', { font: 'body', size: 26, color: INK_TEXT.quiet, y: B + 170, width: colW * 2 + colGap, height: 40 });
         makeButton(root, 'Back', ButtonStyle.Dark, 'Back', 600, 100, { y: B + 40 + 50 }, () => this.goBack());
     }
 
